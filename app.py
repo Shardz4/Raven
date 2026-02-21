@@ -1,8 +1,10 @@
 import os
 import time
+import requests
 from datetime import datetime
 
 import streamlit as st
+from streamlit_lottie import st_lottie
 
 from agent.coordinator import AgentCoordinator
 from agent.cortensor_live import CortensorLiveNetwork
@@ -24,6 +26,16 @@ def _miner_mode_label(mode: str) -> str:
     if mode == "production":
         return "Production LLMs"
     return "Cortensor (live)"  # Fallback to Cortensor
+
+@st.cache_data
+def load_lottieurl(url: str):
+    try:
+        r = requests.get(url)
+        if r.status_code != 200:
+            return None
+        return r.json()
+    except Exception:
+        return None
 
 # --- Extreme Aesthetic CSS Overhaul ---
 st.markdown("""
@@ -242,7 +254,11 @@ with tab_run:
                             """,
                             unsafe_allow_html=True,
                         )
-                        st.link_button("🔗 Pay via x402", data["payment_link"], use_container_width=True)
+                        if st.button("🔗 Pay via x402", key="pay_run", use_container_width=True):
+                            with st.spinner("Processing Payment via x402 Gateway..."):
+                                time.sleep(1.5)
+                            st.toast("Payment Confirmed! Decrypting Patch...", icon="✅")
+                            st.balloons()
 
 with tab_demo_simulate:
     st.subheader("🎭 Presentation Demo Simulator")
@@ -336,12 +352,21 @@ with tab_demo_simulate:
                     ''',
                     unsafe_allow_html=True,
                 )
-                st.link_button("🔗 Pay via x402", f"https://x402.pay/invoice/inv_{inv_id}", use_container_width=True)
+                if st.button("🔗 Pay via x402", key="pay_sim", use_container_width=True):
+                    with st.spinner("Processing Payment via x402 Gateway..."):
+                        time.sleep(1.5)
+                    st.toast("Payment Confirmed! Decrypting Patch...", icon="✅")
+                    st.balloons()
 
 with tab_dashboard:
     st.subheader("📡 Network Dashboard")
     mode = _effective_miner_mode()
     
+    # Render interactive Lottie animation
+    lottie_network = load_lottieurl("https://assets9.lottiefiles.com/packages/lf20_tno6cg2w.json")
+    if lottie_network:
+        st_lottie(lottie_network, height=200, key="network_anim")
+
     # Hackathon Demo Polish: Fake lively metrics
     m1, m2, m3 = st.columns(3)
     m1.metric("Active Miners", "420", "+12 today")

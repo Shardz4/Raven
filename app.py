@@ -35,7 +35,7 @@ st.markdown("""
         font-family: 'Courier New', Courier, monospace;
     }
     
-    /* Extreme Cyberpunk CRT Overlay */
+    /* Subtle Cyberpunk CRT Overlay */
     .stApp::after {
         content: " ";
         display: block;
@@ -44,17 +44,17 @@ st.markdown("""
         left: 0;
         width: 100vw;
         height: 100vh;
-        background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.3) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.05), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.05));
+        background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.02));
         background-size: 100% 3px, 3px 100%;
         z-index: 100;
         pointer-events: none;
     }
 
-    /* Glitch Animation */
+    /* Subtle Glitch Animation */
     @keyframes glitch {
-        2%,64% { transform: translate(1px,0) skew(0deg); }
-        4%,60% { transform: translate(-1px,0) skew(0deg); }
-        62% { transform: translate(0,0) skew(3deg); }
+        2%,64% { transform: translate(0.5px,0) skew(0deg); }
+        4%,60% { transform: translate(-0.5px,0) skew(0deg); }
+        62% { transform: translate(0,0) skew(1deg); }
     }
 
     /* Headers */
@@ -274,6 +274,7 @@ with tab_demo_simulate:
     if demo_run_btn:
         import uuid
         status_box = st.empty()
+        result_box = st.container()
         st.markdown("### 📡 Live Simulation Console")
         terminal_placeholder = st.empty()
         logs = []

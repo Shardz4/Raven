@@ -25,16 +25,111 @@ def _miner_mode_label(mode: str) -> str:
         return "Production LLMs"
     return "Cortensor (live)"  # Fallback to Cortensor
 
-# Custom CSS for x402 styling
+# --- Extreme Aesthetic CSS Overhaul ---
 st.markdown("""
 <style>
-    .stSuccess { border-left: 5px solid #00ff00; }
-    .payment-box {
-        padding: 20px;
+    /* Global Background and Typography */
+    .stApp {
+        background-color: #0d1117;
+        color: #c9d1d9;
+        font-family: 'Courier New', Courier, monospace;
+    }
+    
+    /* Headers */
+    h1, h2, h3 {
+        color: #58a6ff !important;
+        text-shadow: 0 0 10px rgba(88, 166, 255, 0.4);
+    }
+
+    /* Animated Neon Buttons */
+    .stButton>button {
+        background: linear-gradient(90deg, #1f6feb, #388bfd);
+        color: white;
+        border: 1px solid #58a6ff;
+        border-radius: 8px;
+        box-shadow: 0 0 15px rgba(56, 139, 253, 0.4);
+        transition: all 0.3s ease;
+        text-transform: uppercase;
+        font-weight: bold;
+        letter-spacing: 1px;
+    }
+    .stButton>button:hover {
+        background: linear-gradient(90deg, #388bfd, #58a6ff);
+        box-shadow: 0 0 25px rgba(88, 166, 255, 0.8);
+        transform: translateY(-2px);
+    }
+    
+    /* Cyberpunk Inputs */
+    .stTextInput>div>div>input {
+        background-color: #161b22;
+        color: #5cf0ff;
+        border: 1px solid #30363d;
+        border-radius: 4px;
+        font-family: monospace;
+    }
+    .stTextInput>div>div>input:focus {
+        border-color: #58a6ff;
+        box-shadow: 0 0 10px rgba(88, 166, 255, 0.3);
+    }
+
+    /* Glassmorphism Containers */
+    div[data-testid="stExpander"] {
+        background: rgba(22, 27, 34, 0.6);
+        border: 1px solid rgba(48, 54, 61, 0.8);
+        backdrop-filter: blur(10px);
         border-radius: 10px;
-        background-color: rgba(128, 128, 128, 0.1);
-        border: 1px solid rgba(128, 128, 128, 0.3);
+    }
+
+    /* The x402 Payment Box */
+    .payment-box {
+        padding: 25px;
+        border-radius: 12px;
+        background: linear-gradient(145deg, rgba(23, 27, 34, 0.9), rgba(13, 17, 23, 0.9));
+        border: 1px solid #e3b341;
+        box-shadow: 0 0 20px rgba(227, 179, 65, 0.2);
         text-align: center;
+        animation: pulse-border 2s infinite;
+    }
+    .payment-box h1 {
+        color: #e3b341 !important;
+        text-shadow: 0 0 15px rgba(227, 179, 65, 0.5);
+        font-size: 3rem;
+        margin: 10px 0;
+    }
+    
+    /* Custom Hacker Terminal Logs */
+    .hacker-terminal {
+        background-color: #000000;
+        border: 1px solid #30363d;
+        border-left: 3px solid #2ea043;
+        color: #3fb950;
+        font-family: 'Consolas', 'Courier New', monospace;
+        padding: 15px;
+        border-radius: 5px;
+        height: 250px;
+        overflow-y: auto;
+        box-shadow: inset 0 0 15px rgba(46, 160, 67, 0.1);
+        margin-bottom: 20px;
+    }
+    .terminal-line {
+        margin: 2px 0;
+        line-height: 1.4;
+    }
+    .terminal-time {
+        color: #8b949e;
+        margin-right: 10px;
+    }
+    
+    /* Metrics */
+    div[data-testid="stMetricValue"] {
+        color: #5cf0ff !important;
+        text-shadow: 0 0 8px rgba(92, 240, 255, 0.4);
+    }
+
+    @keyframes pulse-border {
+        0% { box-shadow: 0 0 15px rgba(227, 179, 65, 0.2); }
+        50% { box-shadow: 0 0 30px rgba(227, 179, 65, 0.5); }
+        100% { box-shadow: 0 0 15px rgba(227, 179, 65, 0.2); }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -73,24 +168,28 @@ with tab_run:
             st.error(f"❌ Failed to initialize Raven agent: {str(e)}")
             st.stop()
 
-        status_box = st.empty()
-        log_box = st.expander("Runtime Logs", expanded=True)
-        result_box = st.container()
+        # Terminal UI Container
+        st.markdown("### 📡 Live Agent Console")
+        terminal_placeholder = st.empty()
         logs = []
 
-        # Stream the agent's workflow events to the UI
-        # The agent delegates the task to the miner network, verifies in Docker, and monetizes.
+        def render_terminal():
+            log_divs = "".join([f"<div class='terminal-line'><span class='terminal-time'>[{time.strftime('%H:%M:%S')}]</span> >_ {line}</div>" for line in logs])
+            terminal_html = f"<div class='hacker-terminal'>{log_divs}</div>"
+            terminal_placeholder.markdown(terminal_html, unsafe_allow_html=True)
+
         for msg_type, data in agent.solve_issue(issue_url):
             if msg_type == "event":
-                status_box.info(data)
-                logs.append(f"[{time.strftime('%H:%M:%S')}] {data}")
-                log_box.text("\n".join(logs))
+                logs.append(data)
+                render_terminal()
 
             elif msg_type == "error":
                 status_box.error(data)
 
             elif msg_type == "complete":
+                status_box = st.empty()
                 status_box.success("✅ Raven Workflow Complete!")
+                st.balloons()
 
                 st.session_state["runs"].insert(
                     0,
@@ -150,14 +249,18 @@ with tab_demo_simulate:
     if demo_run_btn:
         import uuid
         status_box = st.empty()
-        log_box = st.expander("Runtime Logs", expanded=True)
-        result_box = st.container()
+        st.markdown("### 📡 Live Simulation Console")
+        terminal_placeholder = st.empty()
         logs = []
 
+        def render_terminal():
+            log_divs = "".join([f"<div class='terminal-line'><span class='terminal-time'>[{time.strftime('%H:%M:%S')}]</span> >_ {line}</div>" for line in logs])
+            terminal_html = f"<div class='hacker-terminal'>{log_divs}</div>"
+            terminal_placeholder.markdown(terminal_html, unsafe_allow_html=True)
+
         def _log(msg):
-            status_box.info(msg)
-            logs.append(f"[{time.strftime('%H:%M:%S')}] {msg}")
-            log_box.text("\\n".join(logs))
+            logs.append(msg)
+            render_terminal()
             time.sleep(0.8)
 
         _log(f"🔍 **Analyzing Issue:** {demo_issue_url}")

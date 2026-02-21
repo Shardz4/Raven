@@ -1,6 +1,7 @@
 import os
 import time
 import requests
+import streamlit.components.v1 as components
 from datetime import datetime
 
 import streamlit as st
@@ -181,8 +182,14 @@ if "runs" not in st.session_state:
     st.session_state["runs"] = []
 
 with tab_run:
-    issue_url = st.text_input("Enter GitHub Issue URL", "https://github.com/cortensor/protocol/issues/101")
-    run_btn = st.button("🔫 Start Bounty Hunt", type="primary")
+    c1, c2 = st.columns([3, 1])
+    with c1:
+        issue_url = st.text_input("Enter GitHub Issue URL", "https://github.com/cortensor/protocol/issues/101")
+        run_btn = st.button("🔫 Start Bounty Hunt", type="primary")
+    with c2:
+        lottie_ai = load_lottieurl("https://assets9.lottiefiles.com/packages/lf20_tno6cg2w.json")
+        if lottie_ai:
+            st_lottie(lottie_ai, height=100, key="run_header_anim")
 
     if run_btn:
         if not issue_url or not issue_url.startswith("https://github.com/"):
@@ -254,31 +261,79 @@ with tab_run:
                             """,
                             unsafe_allow_html=True,
                         )
-                        if st.button("🔗 Pay via x402", key="pay_run", use_container_width=True):
-                            with st.spinner("Processing Payment via x402 Gateway..."):
-                                time.sleep(1.5)
-                            st.toast("Payment Confirmed! Decrypting Patch...", icon="✅")
-                            st.balloons()
+                        components.html(
+                            """
+                            <button id="pay-btn-run" onclick="payWithMetaMask()" style="width: 100%; border-radius: 6px; padding: 12px; background-color: #0d1117; color: #5cf0ff; border: 1px solid #5cf0ff; font-weight: bold; cursor: pointer; font-family: 'Courier New', monospace; transition: all 0.3s ease;">
+                                🦊 Connect MetaMask & Pay
+                            </button>
+                            <script>
+                            async function payWithMetaMask() {
+                                const btn = document.getElementById('pay-btn-run');
+                                if (typeof window.ethereum === 'undefined') {
+                                    btn.innerText = '❌ MetaMask Not Found.';
+                                    btn.style.backgroundColor = '#aa0000';
+                                    btn.style.borderColor = '#aa0000';
+                                    btn.style.color = 'white';
+                                    return;
+                                }
+                                
+                                btn.innerText = '⚙️ Connecting...';
+                                btn.style.opacity = '0.8';
+                                
+                                try {
+                                    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                                    const account = accounts[0];
+                                    btn.innerText = '✍️ Requesting Signature...';
+                                    
+                                    const msg = 'Authorize x402 payment of 5.00 USDC for Raven Code Patch decryption.';
+                                    await window.ethereum.request({
+                                        method: 'personal_sign',
+                                        params: [msg, account]
+                                    });
+                                    
+                                    btn.innerText = '✅ Payment Confirmed! Patch Decrypted!';
+                                    btn.style.backgroundColor = '#1f6b39';
+                                    btn.style.borderColor = '#2ea043';
+                                    btn.style.color = 'white';
+                                    btn.style.opacity = '1';
+                                } catch (error) {
+                                    btn.innerText = '❌ Payment Rejected';
+                                    btn.style.backgroundColor = '#aa0000';
+                                    btn.style.borderColor = '#aa0000';
+                                    btn.style.color = 'white';
+                                    btn.style.opacity = '1';
+                                }
+                            }
+                            </script>
+                            """,
+                            height=65
+                        )
 
 with tab_demo_simulate:
     st.subheader("🎭 Presentation Demo Simulator")
-    st.markdown("Use these scenarios during a live presentation to perfectly simulate the miner network instantly.")
     
-    if "demo_url_input" not in st.session_state:
-        st.session_state["demo_url_input"] = "https://github.com/cortensor/protocol/issues/101"
-
-    with st.expander("✨ Quick Demo Scenarios", expanded=True):
-        st.markdown("Click to load a scenario for your live demo.")
-        c1, c2, c3 = st.columns(3)
-        if c1.button("Reentrancy Bug"):
-            st.session_state["demo_url_input"] = "https://github.com/demo-project/issues/reentrancy"
-        if c2.button("Memory Leak"):
-            st.session_state["demo_url_input"] = "https://github.com/demo-project/issues/memory-leak"
-        if c3.button("Default Setup"):
+    c1, c2 = st.columns([3, 1])
+    with c1:
+        if "demo_url_input" not in st.session_state:
             st.session_state["demo_url_input"] = "https://github.com/cortensor/protocol/issues/101"
 
-    demo_issue_url = st.text_input("Simulate Issue URL", key="demo_url_input")
-    demo_run_btn = st.button("🎭 Run Simulation", type="primary")
+        with st.expander("✨ Quick Demo Scenarios", expanded=True):
+            st.markdown("Click to load a scenario for your live demo.")
+            sc1, sc2, sc3 = st.columns(3)
+            if sc1.button("Reentrancy Bug"):
+                st.session_state["demo_url_input"] = "https://github.com/demo-project/issues/reentrancy"
+            if sc2.button("Memory Leak"):
+                st.session_state["demo_url_input"] = "https://github.com/demo-project/issues/memory-leak"
+            if sc3.button("Default Setup"):
+                st.session_state["demo_url_input"] = "https://github.com/cortensor/protocol/issues/101"
+
+        demo_issue_url = st.text_input("Simulate Issue URL", key="demo_url_input")
+        demo_run_btn = st.button("🎭 Run Simulation", type="primary")
+
+    with c2:
+        lottie_hacker = load_lottieurl("https://assets9.lottiefiles.com/packages/lf20_tno6cg2w.json")
+        if lottie_hacker:
+            st_lottie(lottie_hacker, height=150, key="sim_header_anim")
 
     if demo_run_btn:
         import uuid
@@ -352,11 +407,53 @@ with tab_demo_simulate:
                     ''',
                     unsafe_allow_html=True,
                 )
-                if st.button("🔗 Pay via x402", key="pay_sim", use_container_width=True):
-                    with st.spinner("Processing Payment via x402 Gateway..."):
-                        time.sleep(1.5)
-                    st.toast("Payment Confirmed! Decrypting Patch...", icon="✅")
-                    st.balloons()
+                components.html(
+                    """
+                    <button id="pay-btn-sim" onclick="payWithMetaMaskSim()" style="width: 100%; border-radius: 6px; padding: 12px; background-color: #0d1117; color: #5cf0ff; border: 1px solid #5cf0ff; font-weight: bold; cursor: pointer; font-family: 'Courier New', monospace; transition: all 0.3s ease;">
+                        🦊 Connect MetaMask & Pay
+                    </button>
+                    <script>
+                    async function payWithMetaMaskSim() {
+                        const btn = document.getElementById('pay-btn-sim');
+                        if (typeof window.ethereum === 'undefined') {
+                            btn.innerText = '❌ MetaMask Not Found.';
+                            btn.style.backgroundColor = '#aa0000';
+                            btn.style.borderColor = '#aa0000';
+                            btn.style.color = 'white';
+                            return;
+                        }
+                        
+                        btn.innerText = '⚙️ Connecting...';
+                        btn.style.opacity = '0.8';
+                        
+                        try {
+                            const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                            const account = accounts[0];
+                            btn.innerText = '✍️ Requesting Signature...';
+                            
+                            const msg = 'Authorize x402 payment of 5.00 USDC for Raven Code Patch decryption.';
+                            await window.ethereum.request({
+                                method: 'personal_sign',
+                                params: [msg, account]
+                            });
+                            
+                            btn.innerText = '✅ Payment Confirmed! Patch Decrypted!';
+                            btn.style.backgroundColor = '#1f6b39';
+                            btn.style.borderColor = '#2ea043';
+                            btn.style.color = 'white';
+                            btn.style.opacity = '1';
+                        } catch (error) {
+                            btn.innerText = '❌ Payment Rejected';
+                            btn.style.backgroundColor = '#aa0000';
+                            btn.style.borderColor = '#aa0000';
+                            btn.style.color = 'white';
+                            btn.style.opacity = '1';
+                        }
+                    }
+                    </script>
+                    """,
+                    height=65
+                )
 
 with tab_dashboard:
     st.subheader("📡 Network Dashboard")

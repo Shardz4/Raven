@@ -1,0 +1,8 @@
+streamlit
+docker
+python-dotenv
+openai
+anthropic
+requests
+python-telegram-bot
+discord.py

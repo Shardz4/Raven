@@ -1,0 +1,9 @@
+{
+  "name": "raven-cortensor-web3-demo",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "ethers": "^6.15.0"
+  }
+}
+

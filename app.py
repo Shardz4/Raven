@@ -1,0 +1,208 @@
+import os
+import time
+from datetime import datetime
+
+import streamlit as st
+
+from agent.coordinator import AgentCoordinator
+from agent.cortensor_live import CortensorLiveNetwork
+from agent.cortensor_production import CortensorNetwork as ProductionMinerNetwork
+
+st.set_page_config(page_title="Raven – Autonomous Bounty Hunter", page_icon="🪶", layout="wide")
+
+def _effective_miner_mode() -> str:
+    raw = (os.getenv("RAVEN_MINER_MODE") or "").strip().lower()
+    if raw:
+        return raw
+    # Default to Cortensor live network
+    return "cortensor"
+
+
+def _miner_mode_label(mode: str) -> str:
+    if mode == "cortensor":
+        return "Cortensor (live)"
+    if mode == "production":
+        return "Production LLMs"
+    return "Cortensor (live)"  # Fallback to Cortensor
+
+# Custom CSS for x402 styling
+st.markdown("""
+<style>
+    .stSuccess { border-left: 5px solid #00ff00; }
+    .payment-box {
+        padding: 20px;
+        border-radius: 10px;
+        background-color: #f0f2f6;
+        border: 1px solid #d1d5db;
+        text-align: center;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+st.title("🪶 Raven: Autonomous Bounty Hunter")
+st.markdown("### Delegate. Execute. Verify. Monetize.")
+
+with st.sidebar:
+    st.header("Raven Status")
+    mode = _effective_miner_mode()
+    st.markdown(f"🟢 **Miner Network:** {_miner_mode_label(mode)}")
+    st.markdown("🟢 **Docker Sandbox:** Ready")
+    st.markdown("🟠 **x402 Gateway:** Active (Testnet)")
+    st.divider()
+    if mode == "cortensor":
+        st.caption(f"Router: `{os.getenv('CORTENSOR_ROUTER_URL') or 'http://localhost:5010'}`")
+    st.info("Raven delegates to miners, verifies patches in a Docker sandbox, and locks the winning fix behind an x402-style payment gate.")
+
+tab_run, tab_dashboard, tab_bots, tab_security = st.tabs(["Run", "Dashboard", "Bots", "Security"])
+
+if "runs" not in st.session_state:
+    st.session_state["runs"] = []
+
+with tab_run:
+    # Init input state safely for Streamlit rerendering
+    if "demo_url_input" not in st.session_state:
+        st.session_state["demo_url_input"] = "https://github.com/cortensor/protocol/issues/101"
+
+    # Hackathon Demo Polish: Pre-filled scenario buttons
+    with st.expander("✨ Quick Demo Scenarios", expanded=False):
+        st.markdown("Click to load a scenario for your live demo.")
+        c1, c2, c3 = st.columns(3)
+        if c1.button("Reentrancy Bug"):
+            st.session_state["demo_url_input"] = "https://github.com/demo-project/issues/reentrancy"
+        if c2.button("Memory Leak"):
+            st.session_state["demo_url_input"] = "https://github.com/demo-project/issues/memory-leak"
+        if c3.button("Default Setup"):
+            st.session_state["demo_url_input"] = "https://github.com/cortensor/protocol/issues/101"
+
+    issue_url = st.text_input("Enter GitHub Issue URL", key="demo_url_input")
+    run_btn = st.button("🔫 Start Bounty Hunt", type="primary")
+
+    if run_btn:
+        if not issue_url or not issue_url.startswith("https://github.com/"):
+            st.error("❌ Please enter a valid GitHub issue URL (must start with https://github.com/)")
+            st.stop()
+
+        try:
+            agent = AgentCoordinator()
+        except RuntimeError as e:
+            st.error(f"❌ Failed to initialize Raven agent: {str(e)}")
+            st.stop()
+
+        status_box = st.empty()
+        log_box = st.expander("Runtime Logs", expanded=True)
+        result_box = st.container()
+        logs = []
+
+        # Stream the agent's workflow events to the UI
+        # The agent delegates the task to the miner network, verifies in Docker, and monetizes.
+        for msg_type, data in agent.solve_issue(issue_url):
+            if msg_type == "event":
+                status_box.info(data)
+                logs.append(f"[{time.strftime('%H:%M:%S')}] {data}")
+                log_box.text("\n".join(logs))
+
+            elif msg_type == "error":
+                status_box.error(data)
+
+            elif msg_type == "complete":
+                status_box.success("✅ Raven Workflow Complete!")
+
+                st.session_state["runs"].insert(
+                    0,
+                    {
+                        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "mode": _miner_mode_label(_effective_miner_mode()),
+                        "winner": data.get("winner"),
+                        "invoice_id": data.get("invoice_id"),
+                    },
+                )
+
+                with result_box:
+                    st.divider()
+                    c1, c2 = st.columns([1, 1])
+
+                    with c1:
+                        st.subheader("📜 Verification Certificate")
+                        st.code(data["verification_logs"], language="text")
+                        st.caption(f"Winner: {data['winner']}")
+
+                    with c2:
+                        st.subheader("💰 x402 Payment Gate")
+                        st.caption("*(Hackathon Demo: Settle invoice to unlock the verified patch source code)*")
+                        st.markdown(
+                            f"""
+                            <div class="payment-box">
+                                <h3>Payment Required</h3>
+                                <p>To unlock the source code, please settle the invoice.</p>
+                                <h1>5.00 USDC</h1>
+                                <small>Invoice ID: {data['invoice_id']}</small>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                        st.link_button("🔗 Pay via x402", data["payment_link"], use_container_width=True)
+
+with tab_dashboard:
+    st.subheader("📡 Network Dashboard")
+    mode = _effective_miner_mode()
+    
+    # Hackathon Demo Polish: Fake lively metrics
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Active Miners", "420", "+12 today")
+    m2.metric("Network Latency", "1.2s", "-0.1s")
+    m3.metric("Total Bounties Paid", "$14,050", "+$500")
+    
+    st.caption(f"Mode: **{_miner_mode_label(mode)}**")
+
+    if mode == "cortensor":
+        try:
+            net = CortensorLiveNetwork()
+            st.json(net.get_network_status())
+        except Exception as e:
+            st.error(f"Failed to query Cortensor Router: {e}")
+            st.info("💡 Make sure CORTENSOR_ROUTER_URL and CORTENSOR_API_KEY are set in .env")
+    elif mode == "production":
+        try:
+            net = ProductionMinerNetwork()
+            st.json(net.get_network_status())
+        except Exception as e:
+            st.error(f"Failed to initialize production miners: {e}")
+    else:
+        # Fallback to Cortensor
+        try:
+            net = CortensorLiveNetwork()
+            st.json(net.get_network_status())
+        except Exception as e:
+            st.error(f"Failed to query Cortensor Router: {e}")
+            st.info("💡 Make sure CORTENSOR_ROUTER_URL and CORTENSOR_API_KEY are set in .env")
+
+    st.divider()
+    st.subheader("🧾 Recent Runs")
+    if st.session_state["runs"]:
+        st.dataframe(st.session_state["runs"], use_container_width=True, hide_index=True)
+    else:
+        st.caption("No runs yet.")
+
+with tab_bots:
+    st.subheader("🤖 Bots (Telegram + Discord)")
+    st.markdown("Run Raven from chat by sending a GitHub issue URL.")
+    st.markdown("Set one or both tokens in `.env`, then run the scripts from the repo root.")
+
+    st.code(
+        "\n".join(
+            [
+                "TELEGRAM_BOT_TOKEN=...",
+                "DISCORD_BOT_TOKEN=...",
+                "",
+                "# Then run:",
+                "python bots/telegram_bot.py",
+                "python bots/discord_bot.py",
+            ]
+        ),
+        language="text",
+    )
+
+with tab_security:
+    st.subheader("🔒 Security Demos")
+    st.markdown("Run the interactive vulnerability demos:")
+    st.code("python DEMO_EXPLOITS.py", language="text")

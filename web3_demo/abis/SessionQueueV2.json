@@ -1,0 +1,32 @@
+[
+  {
+    "type": "function",
+    "name": "getTasksBySessionId",
+    "stateMutability": "view",
+    "inputs": [{ "name": "sessionId", "type": "uint256" }],
+    "outputs": [
+      {
+        "name": "tasks",
+        "type": "tuple[]",
+        "components": [
+          { "name": "taskId", "type": "uint256" },
+          { "name": "taskData", "type": "string" }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "getTaskResults",
+    "stateMutability": "view",
+    "inputs": [
+      { "name": "sessionId", "type": "uint256" },
+      { "name": "taskId", "type": "uint256" }
+    ],
+    "outputs": [
+      { "name": "miners", "type": "address[]" },
+      { "name": "results", "type": "string[]" }
+    ]
+  }
+]
+

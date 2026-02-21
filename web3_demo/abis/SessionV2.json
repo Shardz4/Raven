@@ -1,0 +1,61 @@
+[
+  {
+    "type": "function",
+    "name": "create",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      { "name": "name", "type": "string" },
+      { "name": "metadata", "type": "string" },
+      { "name": "owner", "type": "address" },
+      { "name": "minNumOfNodes", "type": "uint256" },
+      { "name": "maxNumOfNodes", "type": "uint256" },
+      { "name": "redundant", "type": "uint256" },
+      { "name": "numOfValidatorNodes", "type": "uint256" },
+      { "name": "mode", "type": "uint256" },
+      { "name": "unused0", "type": "uint256" },
+      { "name": "unused1", "type": "uint256" },
+      { "name": "ttl", "type": "uint256" },
+      { "name": "stake", "type": "uint256" }
+    ],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "getSessionsByAddress",
+    "stateMutability": "view",
+    "inputs": [{ "name": "userAddr", "type": "address" }],
+    "outputs": [
+      {
+        "name": "sessions",
+        "type": "tuple[]",
+        "components": [
+          { "name": "sessionId", "type": "uint256" },
+          { "name": "owner", "type": "address" }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "getEphemeralNodes",
+    "stateMutability": "view",
+    "inputs": [{ "name": "sessionId", "type": "uint256" }],
+    "outputs": [{ "name": "miners", "type": "address[]" }]
+  },
+  {
+    "type": "function",
+    "name": "submit",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      { "name": "sessionId", "type": "uint256" },
+      { "name": "nodeType", "type": "uint256" },
+      { "name": "taskData", "type": "string" },
+      { "name": "promptType", "type": "uint256" },
+      { "name": "promptTemplate", "type": "string" },
+      { "name": "llmParams", "type": "uint256[]" },
+      { "name": "clientReference", "type": "string" }
+    ],
+    "outputs": []
+  }
+]
+

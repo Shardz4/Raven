@@ -58,25 +58,7 @@ class AgentCoordinator:
             # 2. VERIFY
             yield "event", "🛡️ **Starting Verification:** Validating patches + running Docker sandbox..."
 
-            # Hackathon Demo Polish: Match tests to scenario
-            if "reentrancy" in issue_url.lower():
-                mock_test_suite = """
-import pytest
-from solution import test_contract_state
-def test_reentrancy_guard():
-    assert test_contract_state("attack_payload") == "REJECTED_REENTRANCY"
-    assert test_contract_state("clean_payload") == "SUCCESS"
-"""
-            elif "memory-leak" in issue_url.lower():
-                mock_test_suite = """
-import pytest
-from solution import data_processor
-def test_memory_allocation():
-    assert data_processor.check_heap() < 1024 * 1024 # Under 1MB
-    assert data_processor.run_loop(100) == "CLEARED"
-"""
-            else:
-                mock_test_suite = """
+            mock_test_suite = """
 import pytest
 from solution import fix_issue
 def test_fix():

@@ -53,28 +53,13 @@ with st.sidebar:
         st.caption(f"Router: `{os.getenv('CORTENSOR_ROUTER_URL') or 'http://localhost:5010'}`")
     st.info("Raven delegates to miners, verifies patches in a Docker sandbox, and locks the winning fix behind an x402-style payment gate.")
 
-tab_run, tab_dashboard, tab_bots, tab_security = st.tabs(["Run", "Dashboard", "Bots", "Security"])
+tab_run, tab_demo_simulate, tab_dashboard, tab_bots, tab_security = st.tabs(["Run", "Simulate Demo", "Dashboard", "Bots", "Security"])
 
 if "runs" not in st.session_state:
     st.session_state["runs"] = []
 
 with tab_run:
-    # Init input state safely for Streamlit rerendering
-    if "demo_url_input" not in st.session_state:
-        st.session_state["demo_url_input"] = "https://github.com/cortensor/protocol/issues/101"
-
-    # Hackathon Demo Polish: Pre-filled scenario buttons
-    with st.expander("✨ Quick Demo Scenarios", expanded=False):
-        st.markdown("Click to load a scenario for your live demo.")
-        c1, c2, c3 = st.columns(3)
-        if c1.button("Reentrancy Bug"):
-            st.session_state["demo_url_input"] = "https://github.com/demo-project/issues/reentrancy"
-        if c2.button("Memory Leak"):
-            st.session_state["demo_url_input"] = "https://github.com/demo-project/issues/memory-leak"
-        if c3.button("Default Setup"):
-            st.session_state["demo_url_input"] = "https://github.com/cortensor/protocol/issues/101"
-
-    issue_url = st.text_input("Enter GitHub Issue URL", key="demo_url_input")
+    issue_url = st.text_input("Enter GitHub Issue URL", "https://github.com/cortensor/protocol/issues/101")
     run_btn = st.button("🔫 Start Bounty Hunt", type="primary")
 
     if run_btn:
@@ -141,6 +126,95 @@ with tab_run:
                             unsafe_allow_html=True,
                         )
                         st.link_button("🔗 Pay via x402", data["payment_link"], use_container_width=True)
+
+with tab_demo_simulate:
+    st.subheader("🎭 Presentation Demo Simulator")
+    st.markdown("Use these scenarios during a live presentation to perfectly simulate the miner network instantly.")
+    
+    if "demo_url_input" not in st.session_state:
+        st.session_state["demo_url_input"] = "https://github.com/cortensor/protocol/issues/101"
+
+    with st.expander("✨ Quick Demo Scenarios", expanded=True):
+        st.markdown("Click to load a scenario for your live demo.")
+        c1, c2, c3 = st.columns(3)
+        if c1.button("Reentrancy Bug"):
+            st.session_state["demo_url_input"] = "https://github.com/demo-project/issues/reentrancy"
+        if c2.button("Memory Leak"):
+            st.session_state["demo_url_input"] = "https://github.com/demo-project/issues/memory-leak"
+        if c3.button("Default Setup"):
+            st.session_state["demo_url_input"] = "https://github.com/cortensor/protocol/issues/101"
+
+    demo_issue_url = st.text_input("Simulate Issue URL", key="demo_url_input")
+    demo_run_btn = st.button("🎭 Run Simulation", type="primary")
+
+    if demo_run_btn:
+        import uuid
+        status_box = st.empty()
+        log_box = st.expander("Runtime Logs", expanded=True)
+        result_box = st.container()
+        logs = []
+
+        def _log(msg):
+            status_box.info(msg)
+            logs.append(f"[{time.strftime('%H:%M:%S')}] {msg}")
+            log_box.text("\\n".join(logs))
+            time.sleep(0.8)
+
+        _log(f"🔍 **Analyzing Issue:** {demo_issue_url}")
+        _log(f"📡 **Delegating to Miner Network:** Requesting 3 redundant solutions...")
+        time.sleep(1)
+        
+        miner_winners = ["Miner-0x4a92", "Miner-0x9f1b", "Miner-0x2cc8"]
+        for m in miner_winners:
+            _log(f"📦 Patch received from **{m}**")
+            
+        _log("🛡️ **Starting Verification:** Validating patches + running Docker sandbox...")
+        
+        test_logs = []
+        for m in miner_winners:
+            _log(f"Testing Patch from **{m}**...")
+            if m == "Miner-0x9f1b":
+                test_logs.append(f"Miner: {m}\\nResult: FAIL\\nLogs: build failed\\n---")
+            else:
+                test_logs.append(f"Miner: {m}\\nResult: PASS\\nLogs: all tests cleared\\n---")
+                
+        winner = "Miner-0x4a92"
+        _log("=== CONSENSUS ===")
+        _log(f"Selected winner: {winner}")
+        
+        _log(f"🏆 **Winner Found:** {winner}. Creating x402 Lock...")
+        status_box.success("✅ Raven Workflow Complete!")
+        
+        inv_id = str(uuid.uuid4())[:8]
+        st.session_state["runs"].insert(0, {
+            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "mode": "Simulation (Demo)",
+            "winner": winner,
+            "invoice_id": f"inv_{inv_id}",
+        })
+
+        with result_box:
+            st.divider()
+            c1, c2 = st.columns([1, 1])
+            with c1:
+                st.subheader("📜 Verification Certificate")
+                st.code("\\n".join(test_logs), language="text")
+                st.caption(f"Winner: {winner}")
+            with c2:
+                st.subheader("💰 x402 Payment Gate")
+                st.caption("*(Hackathon Demo: Settle invoice to unlock the verified patch source code)*")
+                st.markdown(
+                    f'''
+                    <div class="payment-box">
+                        <h3>Payment Required</h3>
+                        <p>To unlock the source code, please settle the invoice.</p>
+                        <h1>5.00 USDC</h1>
+                        <small>Invoice ID: inv_{inv_id}</small>
+                    </div>
+                    ''',
+                    unsafe_allow_html=True,
+                )
+                st.link_button("🔗 Pay via x402", f"https://x402.pay/invoice/inv_{inv_id}", use_container_width=True)
 
 with tab_dashboard:
     st.subheader("📡 Network Dashboard")

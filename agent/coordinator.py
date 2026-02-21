@@ -55,15 +55,28 @@ class AgentCoordinator:
                 yield "error", "❌ No solutions received from miner network."
                 return
 
-            # 2. VERIFY
-            yield "event", "🛡️ **Starting Verification:** Validating patches + running Docker sandbox..."
+            # Dynamic Execution: Parse repo URL & Create Sandbox execution script
+            import urllib.parse
+            parsed_url = urllib.parse.urlsplit(issue_url)
+            path_parts = [p for p in parsed_url.path.split('/') if p]
 
-            mock_test_suite = """
-import pytest
-from solution import fix_issue
-def test_fix():
-    assert fix_issue([3,1,2]) == [1,2,3]
-    assert fix_issue([]) == []
+            if len(path_parts) >= 2 and parsed_url.netloc == "github.com":
+                org, repo = path_parts[0], path_parts[1]
+                target_repo_url = f"https://github.com/{org}/{repo}.git"
+            else:
+                # Fallback for arbitrary or invalid URLs
+                target_repo_url = "https://github.com/demo-organization/demo-repo.git"
+
+            run_tests_sh = f"""#!/bin/bash
+set -e
+echo "Cloning target repository: {target_repo_url}"
+git clone --depth 1 {target_repo_url} target_repo || exit 1
+cd target_repo
+echo "Applying AI generated patch (solution.py)..."
+cp /app/solution.py .
+echo "Installing dependencies and running tests..."
+if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+python -m pytest -q
 """
 
             logs = []
@@ -78,12 +91,12 @@ def test_fix():
                     v = validate_patch_code(code)
                     if not v.ok:
                         validation_blocked += 1
-                        logs.append(f"Miner: {miner_id}\nResult: BLOCKED\nReason: {v.reason}\n---")
+                        logs.append(f"Miner: {miner_id}\\nResult: BLOCKED\\nReason: {v.reason}\\n---")
                         yield "event", f"⛔ Patch from **{miner_id}** blocked: {v.reason}"
                         continue
 
-                    yield "event", f"Testing Patch from **{miner_id}**..."
-                    result = self.sandbox.run_verification(code, mock_test_suite)
+                    yield "event", f"Testing Patch from **{miner_id}** in Sandbox..."
+                    result = self.sandbox.run_verification(code, run_tests_sh)
 
                     logs.append(f"Miner: {miner_id}\nResult: {'PASS' if result['success'] else 'FAIL'}\nLogs: {result['logs']}\n---")
 

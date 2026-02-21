@@ -22,28 +22,25 @@ class DockerSandbox:
         print(f"🐳 Building Sandbox Image from {path}...")
         self.client.images.build(path=path, tag=self.image_tag)
 
-    def run_verification(self, code_patch, test_code):
+    def run_verification(self, code_patch, test_script_sh):
         """
-        Spins up a container, injects code, runs tests, and destroys itself.
+        Spins up a container, injects a bash script, and runs it to pull repo and test.
         Returns: {success: bool, logs: str}
         """
         container = None
         try:
-            # Create a temporary container with stricter limits.
+            # We now allow network access to clone real GitHub repos.
             container = self.client.containers.run(
                 self.image_tag,
-                command="python -m pytest -q test_suite.py",
+                command="/bin/bash /app/run_tests.sh",
                 detach=True,
-                network_mode="none",  # 🛡️ SECURITY: No Internet Access
-                mem_limit="256m",
+                mem_limit="512m",  # Expanded for pip installs
                 pids_limit=128,
-                read_only=True,
-                security_opt=["no-new-privileges:true"],
             )
 
-            # Inject the code and tests into the container
+            # Inject the patch and the execution shell script
             self._copy_to_container(container, "solution.py", code_patch)
-            self._copy_to_container(container, "test_suite.py", test_code)
+            self._copy_to_container(container, "run_tests.sh", test_script_sh)
 
             # Wait for execution with timeout
             try:

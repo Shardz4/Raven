@@ -32,8 +32,8 @@ st.markdown("""
     .payment-box {
         padding: 20px;
         border-radius: 10px;
-        background-color: #f0f2f6;
-        border: 1px solid #d1d5db;
+        background-color: rgba(128, 128, 128, 0.1);
+        border: 1px solid rgba(128, 128, 128, 0.3);
         text-align: center;
     }
 </style>

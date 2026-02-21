@@ -1,7 +1,7 @@
 # 🪶 Raven – Autonomous Web3 Bounty Hunter
 
 <div align="center">
-  <img src="https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&q=80&w=1200" alt="Raven Cyberpunk Dashboard" width="100%" style="border-radius: 10px; margin-bottom: 20px;">
+  <img src="https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&q=80&w=1200" alt="Raven Cyberpunk Dashboard" width="600" style="border-radius: 10px; margin-bottom: 20px;">
 </div>
 
 **Raven is an autonomous AI agent built for the Cortensor Hackathon that finds, patches, and monetizes GitHub issues on autopilot.**

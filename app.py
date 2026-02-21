@@ -30,15 +30,38 @@ st.markdown("""
 <style>
     /* Global Background and Typography */
     .stApp {
-        background-color: #0d1117;
+        background-color: #050a0f;
         color: #c9d1d9;
         font-family: 'Courier New', Courier, monospace;
     }
     
+    /* Extreme Cyberpunk CRT Overlay */
+    .stApp::after {
+        content: " ";
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.3) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.05), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.05));
+        background-size: 100% 3px, 3px 100%;
+        z-index: 100;
+        pointer-events: none;
+    }
+
+    /* Glitch Animation */
+    @keyframes glitch {
+        2%,64% { transform: translate(1px,0) skew(0deg); }
+        4%,60% { transform: translate(-1px,0) skew(0deg); }
+        62% { transform: translate(0,0) skew(3deg); }
+    }
+
     /* Headers */
     h1, h2, h3 {
-        color: #58a6ff !important;
-        text-shadow: 0 0 10px rgba(88, 166, 255, 0.4);
+        color: #5cf0ff !important;
+        text-shadow: 0 0 10px rgba(92, 240, 255, 0.6), 0 0 20px rgba(92, 240, 255, 0.4);
+        animation: glitch 3s linear infinite;
     }
 
     /* Animated Neon Buttons */
@@ -168,6 +191,8 @@ with tab_run:
             st.error(f"❌ Failed to initialize Raven agent: {str(e)}")
             st.stop()
 
+        status_box = st.empty()
+        
         # Terminal UI Container
         st.markdown("### 📡 Live Agent Console")
         terminal_placeholder = st.empty()

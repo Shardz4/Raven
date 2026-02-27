@@ -269,28 +269,31 @@ with tab_run:
                             <script>
                             async function payWithMetaMask() {
                                 const btn = document.getElementById('pay-btn-run');
-                                if (typeof window.ethereum === 'undefined') {
+                                // MetaMask injects into the top-level window; Streamlit components run in an iframe.
+                                // Try both the current window and the parent window to improve detection in embedded contexts.
+                                const eth = (window.ethereum || (window.parent && window.parent.ethereum));
+                                if (!eth) {
                                     btn.innerText = '❌ MetaMask Not Found.';
                                     btn.style.backgroundColor = '#aa0000';
                                     btn.style.borderColor = '#aa0000';
                                     btn.style.color = 'white';
                                     return;
                                 }
-                                
+
                                 btn.innerText = '⚙️ Connecting...';
                                 btn.style.opacity = '0.8';
-                                
+
                                 try {
-                                    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                                    const accounts = await eth.request({ method: 'eth_requestAccounts' });
                                     const account = accounts[0];
                                     btn.innerText = '✍️ Requesting Signature...';
-                                    
+
                                     const msg = 'Authorize x402 payment of 5.00 USDC for Raven Code Patch decryption.';
-                                    await window.ethereum.request({
+                                    await eth.request({
                                         method: 'personal_sign',
                                         params: [msg, account]
                                     });
-                                    
+
                                     btn.innerText = '✅ Payment Confirmed! Patch Decrypted!';
                                     btn.style.backgroundColor = '#1f6b39';
                                     btn.style.borderColor = '#2ea043';
@@ -415,28 +418,30 @@ with tab_demo_simulate:
                     <script>
                     async function payWithMetaMaskSim() {
                         const btn = document.getElementById('pay-btn-sim');
-                        if (typeof window.ethereum === 'undefined') {
+                        // Try parent window injection as well (Streamlit iframe contexts).
+                        const eth = (window.ethereum || (window.parent && window.parent.ethereum));
+                        if (!eth) {
                             btn.innerText = '❌ MetaMask Not Found.';
                             btn.style.backgroundColor = '#aa0000';
                             btn.style.borderColor = '#aa0000';
                             btn.style.color = 'white';
                             return;
                         }
-                        
+
                         btn.innerText = '⚙️ Connecting...';
                         btn.style.opacity = '0.8';
-                        
+
                         try {
-                            const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                            const accounts = await eth.request({ method: 'eth_requestAccounts' });
                             const account = accounts[0];
                             btn.innerText = '✍️ Requesting Signature...';
-                            
+
                             const msg = 'Authorize x402 payment of 5.00 USDC for Raven Code Patch decryption.';
-                            await window.ethereum.request({
+                            await eth.request({
                                 method: 'personal_sign',
                                 params: [msg, account]
                             });
-                            
+
                             btn.innerText = '✅ Payment Confirmed! Patch Decrypted!';
                             btn.style.backgroundColor = '#1f6b39';
                             btn.style.borderColor = '#2ea043';
@@ -454,6 +459,7 @@ with tab_demo_simulate:
                     """,
                     height=65
                 )
+                
 
 with tab_dashboard:
     st.subheader("📡 Network Dashboard")

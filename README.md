@@ -1,10 +1,10 @@
-# 🪶 Raven – Autonomous Web3 Bounty Hunter
+# 🪶 Raven – Autonomous Bounty Hunter
 
 <div align="center">
   <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop" alt="Raven Minimal Banner" width="100%" height="150" style="border-radius: 10px; margin-bottom: 20px; object-fit: cover;">
 </div>
 
-**Raven is an autonomous AI agent built for the Cortensor Hackathon that finds, patches, and monetizes GitHub issues on autopilot.**
+**Raven is an autonomous AI agent built that finds, patches, and monetizes GitHub issues.**
 
 Unlike traditional AI coding assistants, Raven operates as a complete decentralized marketplace:
 1. **Delegates** open Github issues to real Cortensor miners.

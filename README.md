@@ -1,5 +1,9 @@
 # 🪶 Raven – Autonomous Web3 Bounty Hunter
 
+
+## migerating from coretesnsor in a few while
+
+
 <div align="center">
   <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop" alt="Raven Minimal Banner" width="100%" height="150" style="border-radius: 10px; margin-bottom: 20px; object-fit: cover;">
 </div>

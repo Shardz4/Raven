@@ -6,6 +6,7 @@ __pycache__/
 # Environments
 .env
 .venv
+.venv-1
 env/
 venv/
 ENV/
@@ -22,3 +23,13 @@ secrets.toml
 # Demo logs and cache
 *.log
 .pytest_cache/
+
+# Go
+backend/raven.exe
+backend/raven
+*.db
+
+# IDE
+.idea/
+.vscode/
+*.swp

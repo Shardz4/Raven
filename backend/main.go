@@ -30,9 +30,15 @@ func main() {
 	defer db.Close()
 	log.Println("✓ Database ready")
 
-	// 3. Initialize GitHub fetcher
+	// 3. Initialize GitHub fetcher + PR creator
 	fetcher := gh.NewFetcher(cfg.GitHubToken)
+	prCreator := gh.NewPRCreator(cfg.GitHubToken)
 	log.Println("✓ GitHub fetcher ready")
+	if prCreator.CanCreatePR() {
+		log.Println("✓ Auto-PR enabled (GITHUB_TOKEN set)")
+	} else {
+		log.Println("⚠ Auto-PR disabled (no GITHUB_TOKEN)")
+	}
 
 	// 4. Initialize LLM providers
 	solvers, judge, err := llm.BuildProviders(cfg)
@@ -57,7 +63,7 @@ func main() {
 	}
 
 	// 6. Start API server
-	server := api.NewServer(cfg, db, fetcher, solvers, judge, sb)
+	server := api.NewServer(cfg, db, fetcher, prCreator, solvers, judge, sb)
 	router := server.Router()
 
 	addr := ":" + cfg.Port

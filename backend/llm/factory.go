@@ -69,6 +69,22 @@ func buildJudge(cfg *config.Config, solvers []Provider) (Provider, error) {
 			return nil, fmt.Errorf("DEEPSEEK_API_KEY required for deepseek judge")
 		}
 		return NewDeepSeek(cfg.DeepSeekKey, cfg.JudgeModel), nil
+	case "grok":
+		if cfg.GrokKey == "" {
+			return nil, fmt.Errorf("XAI_API_KEY required for grok judge")
+		}
+		return NewGrok(cfg.GrokKey, cfg.JudgeModel), nil
+	case "custom":
+		// Custom endpoint — plug in your own fine-tuned model
+		if cfg.CustomJudgeURL == "" {
+			return nil, fmt.Errorf("CUSTOM_JUDGE_URL required when JUDGE_PROVIDER=custom")
+		}
+		log.Printf("[llm] ✓ Custom judge registered: %s (%s)", cfg.CustomJudgeURL, cfg.CustomJudgeModel)
+		return NewCustom(cfg.CustomJudgeURL, cfg.CustomJudgeModel, cfg.CustomJudgeKey), nil
+	case "none", "skip":
+		// No judge — consensus will use default neutral scores
+		log.Println("[llm] ⚠ Judge phase disabled (JUDGE_PROVIDER=none)")
+		return nil, nil
 	default:
 		// Try to use the first solver as fallback
 		if len(solvers) > 0 {

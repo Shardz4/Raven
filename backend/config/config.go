@@ -33,6 +33,17 @@ type Config struct {
 	DockerTimeout int    // Seconds
 	SandboxImage  string // Docker image tag for sandbox
 
+	// Auto PR
+	AutoPR bool // Automatically open PRs with winning patches
+
+	// Self-Healing
+	MaxHealRetries int // Max retry rounds when all patches fail sandbox
+
+	// Custom Judge
+	CustomJudgeURL   string // HTTP endpoint for custom judge model
+	CustomJudgeKey   string // API key for custom judge
+	CustomJudgeModel string // Model name for custom judge
+
 	// Database
 	DBPath string
 
@@ -55,17 +66,23 @@ func Load() *Config {
 		DeepSeekKey:   os.Getenv("DEEPSEEK_API_KEY"),
 		GrokKey:       firstNonEmpty(os.Getenv("XAI_API_KEY"), os.Getenv("GROK_API_KEY")),
 		OllamaURL:     envOrDefault("OLLAMA_URL", "http://localhost:11434"),
-		JudgeProvider: envOrDefault("JUDGE_PROVIDER", "openai"),
-		JudgeModel:    envOrDefault("JUDGE_MODEL", "gpt-4o"),
-		Redundancy:    envOrDefaultInt("RAVEN_REDUNDANCY", 3),
-		DockerTimeout: envOrDefaultInt("DOCKER_TIMEOUT", 60),
-		SandboxImage:  envOrDefault("SANDBOX_IMAGE", "raven-sandbox:latest"),
-		DBPath:        envOrDefault("DB_PATH", "raven.db"),
-		TelegramToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
-		DiscordToken:  os.Getenv("DISCORD_BOT_TOKEN"),
+		JudgeProvider:    envOrDefault("JUDGE_PROVIDER", "openai"),
+		JudgeModel:       envOrDefault("JUDGE_MODEL", "gpt-4o"),
+		Redundancy:       envOrDefaultInt("RAVEN_REDUNDANCY", 3),
+		DockerTimeout:    envOrDefaultInt("DOCKER_TIMEOUT", 60),
+		SandboxImage:     envOrDefault("SANDBOX_IMAGE", "raven-sandbox:latest"),
+		AutoPR:           envOrDefault("AUTO_PR", "") != "",
+		MaxHealRetries:   envOrDefaultInt("MAX_HEAL_RETRIES", 2),
+		CustomJudgeURL:   os.Getenv("CUSTOM_JUDGE_URL"),
+		CustomJudgeKey:   os.Getenv("CUSTOM_JUDGE_KEY"),
+		CustomJudgeModel: envOrDefault("CUSTOM_JUDGE_MODEL", "custom-v1"),
+		DBPath:           envOrDefault("DB_PATH", "raven.db"),
+		TelegramToken:    os.Getenv("TELEGRAM_BOT_TOKEN"),
+		DiscordToken:     os.Getenv("DISCORD_BOT_TOKEN"),
 	}
 
-	log.Printf("[config] Loaded — port=%s, redundancy=%d, judge=%s/%s", cfg.Port, cfg.Redundancy, cfg.JudgeProvider, cfg.JudgeModel)
+	log.Printf("[config] Loaded — port=%s, redundancy=%d, judge=%s/%s, auto_pr=%v, heal_retries=%d",
+		cfg.Port, cfg.Redundancy, cfg.JudgeProvider, cfg.JudgeModel, cfg.AutoPR, cfg.MaxHealRetries)
 	return cfg
 }
 

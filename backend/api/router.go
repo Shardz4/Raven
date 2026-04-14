@@ -23,16 +23,17 @@ import (
 
 // Server holds the API dependencies.
 type Server struct {
-	cfg      *config.Config
-	store    *store.Store
-	fetcher  *gh.Fetcher
-	solvers  []llm.Provider
-	judge    llm.Provider
-	sandbox  *sandbox.Manager
+	cfg       *config.Config
+	store     *store.Store
+	fetcher   *gh.Fetcher
+	prCreator *gh.PRCreator
+	solvers   []llm.Provider
+	judge     llm.Provider
+	sandbox   *sandbox.Manager
 
 	// SSE event channels per job ID
-	mu       sync.RWMutex
-	streams  map[string][]chan string
+	mu      sync.RWMutex
+	streams map[string][]chan string
 }
 
 // NewServer creates the API server with all dependencies.
@@ -40,18 +41,20 @@ func NewServer(
 	cfg *config.Config,
 	db *store.Store,
 	fetcher *gh.Fetcher,
+	prCreator *gh.PRCreator,
 	solvers []llm.Provider,
 	judge llm.Provider,
 	sb *sandbox.Manager,
 ) *Server {
 	return &Server{
-		cfg:     cfg,
-		store:   db,
-		fetcher: fetcher,
-		solvers: solvers,
-		judge:   judge,
-		sandbox: sb,
-		streams: make(map[string][]chan string),
+		cfg:       cfg,
+		store:     db,
+		fetcher:   fetcher,
+		prCreator: prCreator,
+		solvers:   solvers,
+		judge:     judge,
+		sandbox:   sb,
+		streams:   make(map[string][]chan string),
 	}
 }
 
@@ -77,6 +80,7 @@ func (s *Server) Router() http.Handler {
 	r.Get("/api/solve/{id}/stream", s.handleStream)
 	r.Get("/api/jobs", s.handleListJobs)
 	r.Get("/api/providers", s.handleProviders)
+	r.Get("/api/leaderboard", s.handleLeaderboard)
 
 	return r
 }
@@ -84,9 +88,15 @@ func (s *Server) Router() http.Handler {
 // ── Handlers ──
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"status":  "healthy",
-		"version": "2.0.0",
+		"version": "2.1.0",
+		"features": map[string]bool{
+			"auto_pr":      s.cfg.AutoPR && s.prCreator.CanCreatePR(),
+			"self_healing": s.cfg.MaxHealRetries > 0,
+			"multi_lang":   true,
+			"leaderboard":  true,
+		},
 	})
 }
 
@@ -108,9 +118,9 @@ func (s *Server) handleSolve(w http.ResponseWriter, r *http.Request) {
 	// Create job
 	jobID := uuid.New().String()[:8]
 	job := &store.Job{
-		ID:       jobID,
-		IssueURL: req.IssueURL,
-		Status:   "pending",
+		ID:        jobID,
+		IssueURL:  req.IssueURL,
+		Status:    "pending",
 		CreatedAt: time.Now(),
 	}
 	if err := s.store.CreateJob(job); err != nil {
@@ -122,10 +132,10 @@ func (s *Server) handleSolve(w http.ResponseWriter, r *http.Request) {
 	go s.processJob(job)
 
 	writeJSON(w, http.StatusAccepted, map[string]any{
-		"job_id":  jobID,
-		"status":  "pending",
-		"stream":  fmt.Sprintf("/api/solve/%s/stream", jobID),
-		"result":  fmt.Sprintf("/api/solve/%s", jobID),
+		"job_id": jobID,
+		"status": "pending",
+		"stream": fmt.Sprintf("/api/solve/%s/stream", jobID),
+		"result": fmt.Sprintf("/api/solve/%s", jobID),
 	})
 }
 
@@ -208,13 +218,29 @@ func (s *Server) handleProviders(w http.ResponseWriter, r *http.Request) {
 			"model": p.Model(),
 		})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"solvers": providers,
-		"judge": map[string]string{
+	judgeInfo := map[string]string{"name": "none", "model": "disabled"}
+	if s.judge != nil {
+		judgeInfo = map[string]string{
 			"name":  s.judge.Name(),
 			"model": s.judge.Model(),
-		},
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"solvers": providers,
+		"judge":   judgeInfo,
 	})
+}
+
+func (s *Server) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
+	entries, err := s.store.GetLeaderboard()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if entries == nil {
+		entries = []*store.LeaderboardEntry{}
+	}
+	writeJSON(w, http.StatusOK, entries)
 }
 
 // ── Job Processing ──
@@ -228,7 +254,6 @@ func (s *Server) emitEvent(jobID, message string) {
 		select {
 		case ch <- message:
 		default:
-			// Drop if channel is full (slow consumer)
 		}
 	}
 	log.Printf("[job:%s] %s", jobID, message)
@@ -252,7 +277,9 @@ func (s *Server) processJob(job *store.Job) {
 		return
 	}
 	job.IssueTitle = issue.Title
+	job.Language = issue.Language
 	emit(fmt.Sprintf("📋 Issue: %s", issue.Title))
+	emit(fmt.Sprintf("🔤 Detected language: %s", issue.Language))
 
 	// 2. Build prompt from actual issue content
 	prompt := issue.Prompt()
@@ -277,12 +304,12 @@ func (s *Server) processJob(job *store.Job) {
 		return
 	}
 
-	// 5. Build test script
-	testScript := sandbox.BuildTestScript(issue.CloneURL)
+	// 5. Build language-aware test script
+	testScript := sandbox.BuildTestScriptForLanguage(issue.CloneURL, issue.Language)
 
-	// 6. Run RavenMind Consensus
+	// 6. Run RavenMind Consensus (with self-healing)
 	emit("🧠 **Starting RavenMind Consensus Engine...**")
-	engine := consensus.NewEngine(s.sandbox, s.judge, emit)
+	engine := consensus.NewEngine(s.sandbox, s.judge, selected, s.cfg.MaxHealRetries, emit)
 	report := engine.Evaluate(patches, testScript)
 
 	if report.Winner == nil {
@@ -292,13 +319,31 @@ func (s *Server) processJob(job *store.Job) {
 		_ = s.store.UpdateJobResult(job)
 		emit("❌ No patches survived consensus")
 		emit("[DONE]")
+
+		// Record all participants as losses in leaderboard
+		for _, c := range report.Candidates {
+			if c.Patch != nil {
+				model := fmt.Sprintf("%s/%s", c.Patch.Provider, c.Patch.Model)
+				_ = s.store.RecordResult(model, false, 0)
+			}
+		}
 		return
 	}
 
-	// 7. Save the result
+	// 7. Record leaderboard results
+	winnerModel := fmt.Sprintf("%s/%s", report.Winner.Patch.Provider, report.Winner.Patch.Model)
+	for _, c := range report.Candidates {
+		if c.Patch != nil {
+			model := fmt.Sprintf("%s/%s", c.Patch.Provider, c.Patch.Model)
+			isWinner := model == winnerModel
+			_ = s.store.RecordResult(model, isWinner, c.FinalScore)
+		}
+	}
+
+	// 8. Save the result
 	reportJSON, _ := json.Marshal(report)
 	job.Status = "completed"
-	job.WinnerModel = fmt.Sprintf("%s/%s", report.Winner.Patch.Provider, report.Winner.Patch.Model)
+	job.WinnerModel = winnerModel
 	job.WinnerCode = report.Winner.Patch.Code
 	job.Explanation = report.Winner.Patch.Explanation
 	job.ConsensusReport = reportJSON
@@ -306,6 +351,34 @@ func (s *Server) processJob(job *store.Job) {
 	_ = s.store.UpdateJobResult(job)
 
 	emit(fmt.Sprintf("✅ Resolution complete! Winner: %s (score: %.1f)", job.WinnerModel, report.Winner.FinalScore))
+
+	// 9. Auto PR (if enabled)
+	if s.cfg.AutoPR && s.prCreator.CanCreatePR() {
+		emit("📤 **Auto PR** — Creating pull request...")
+		prReq := &gh.PRRequest{
+			Owner:       issue.Owner,
+			Repo:        issue.Repo,
+			IssueNumber: issue.Number,
+			Title:       fmt.Sprintf("fix: resolve #%d via Raven AI", issue.Number),
+			Body: fmt.Sprintf("## 🪶 Raven Auto-Fix for #%d\n\n"+
+				"**Issue:** %s\n\n"+
+				"**Winning Model:** `%s` (score: %.1f)\n\n"+
+				"**RavenMind Consensus Report:**\n```\n%s\n```\n\n"+
+				"---\n_This PR was automatically generated by [Raven](https://github.com/Shardz4/Raven)._",
+				issue.Number, issue.Title, job.WinnerModel, report.Winner.FinalScore, report.Summary),
+			PatchCode: report.Winner.Patch.Code,
+		}
+
+		prResult, err := s.prCreator.CreatePR(prReq)
+		if err != nil {
+			emit(fmt.Sprintf("⚠️ Auto PR failed: %v", err))
+		} else {
+			job.PRURL = prResult.PRURL
+			_ = s.store.UpdateJobResult(job)
+			emit(fmt.Sprintf("✅ PR opened: %s", prResult.PRURL))
+		}
+	}
+
 	emit("[DONE]")
 }
 

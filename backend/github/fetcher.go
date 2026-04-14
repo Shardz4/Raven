@@ -14,11 +14,12 @@ type Issue struct {
 	Title    string   `json:"title"`
 	Body     string   `json:"body"`
 	Labels   []string `json:"labels"`
-	RepoURL  string   `json:"repo_url"`   // e.g. "https://github.com/owner/repo"
+	Language string   `json:"language"` // Primary repo language (e.g., "python", "go", "javascript")
+	RepoURL  string   `json:"repo_url"`
 	Owner    string   `json:"owner"`
 	Repo     string   `json:"repo"`
 	Number   int      `json:"number"`
-	CloneURL string   `json:"clone_url"` // e.g. "https://github.com/owner/repo.git"
+	CloneURL string   `json:"clone_url"`
 }
 
 // Prompt builds a rich prompt string from the issue data for sending to LLMs.
@@ -108,14 +109,50 @@ func (f *Fetcher) FetchIssue(issueURL string) (*Issue, error) {
 		labels = append(labels, l.Name)
 	}
 
+	// Detect repo language
+	language := f.detectLanguage(owner, repo)
+
 	return &Issue{
 		Title:    ghIssue.Title,
 		Body:     ghIssue.Body,
 		Labels:   labels,
+		Language: language,
 		RepoURL:  fmt.Sprintf("https://github.com/%s/%s", owner, repo),
 		Owner:    owner,
 		Repo:     repo,
 		Number:   number,
 		CloneURL: fmt.Sprintf("https://github.com/%s/%s.git", owner, repo),
 	}, nil
+}
+
+// detectLanguage queries the GitHub repo API for the primary language.
+func (f *Fetcher) detectLanguage(owner, repo string) string {
+	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s", owner, repo)
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return "python" // default
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "Raven-Agent/2.0")
+	if f.token != "" {
+		req.Header.Set("Authorization", "Bearer "+f.token)
+	}
+
+	resp, err := f.client.Do(req)
+	if err != nil {
+		return "python"
+	}
+	defer resp.Body.Close()
+
+	var repoData struct {
+		Language string `json:"language"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&repoData); err != nil {
+		return "python"
+	}
+
+	if repoData.Language == "" {
+		return "python"
+	}
+	return strings.ToLower(repoData.Language)
 }

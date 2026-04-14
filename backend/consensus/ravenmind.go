@@ -59,17 +59,23 @@ type Report struct {
 
 // Engine is the RavenMind consensus engine.
 type Engine struct {
-	sandbox *sandbox.Manager
-	judge   llm.Provider
-	onEvent func(string)
+	sandbox    *sandbox.Manager
+	judge      llm.Provider
+	solvers    []llm.Provider // needed for self-healing retries
+	maxRetries int            // max self-healing rounds
+	onEvent    func(string)
 }
 
 // NewEngine creates a new RavenMind consensus engine.
-func NewEngine(sandbox *sandbox.Manager, judge llm.Provider, onEvent func(string)) *Engine {
+// solvers are needed for self-healing (re-prompting on failure).
+// maxRetries controls how many self-healing rounds to attempt (0 = disabled).
+func NewEngine(sb *sandbox.Manager, judge llm.Provider, solvers []llm.Provider, maxRetries int, onEvent func(string)) *Engine {
 	return &Engine{
-		sandbox: sandbox,
-		judge:   judge,
-		onEvent: onEvent,
+		sandbox:    sb,
+		judge:      judge,
+		solvers:    solvers,
+		maxRetries: maxRetries,
+		onEvent:    onEvent,
 	}
 }
 
@@ -140,6 +146,10 @@ func (e *Engine) Evaluate(patches []*llm.PatchResult, testScript string) *Report
 	// Filter to passing candidates
 	passing := filterPassing(candidates)
 	if len(passing) == 0 {
+		// ── Self-Healing: retry with error feedback ──
+		if e.maxRetries > 0 && e.solvers != nil && len(e.solvers) > 0 {
+			return e.selfHeal(candidates, testScript, report, 1)
+		}
 		report.Summary = "All patches failed sandbox verification"
 		report.Candidates = candidates
 		return report
@@ -348,3 +358,123 @@ func truncate(s string, n int) string {
 	}
 	return s[:n]
 }
+
+// selfHeal implements iterative self-healing: when all patches fail sandbox,
+// it feeds the error logs back to the LLMs and asks them to fix their patches.
+func (e *Engine) selfHeal(failedCandidates []*Candidate, testScript string, report *Report, round int) *Report {
+	if round > e.maxRetries {
+		report.Summary = fmt.Sprintf("All patches failed after %d self-healing rounds", e.maxRetries)
+		report.Candidates = failedCandidates
+		return report
+	}
+
+	e.emit(fmt.Sprintf("🔄 **Self-Healing Round %d/%d** — Feeding errors back to LLMs...", round, e.maxRetries))
+
+	// Collect error logs from failed candidates
+	var errorFeedback strings.Builder
+	errorFeedback.WriteString("Your previous code patch FAILED testing. Here are the errors:\n\n")
+	for _, c := range failedCandidates {
+		if c.SandboxResult != nil && !c.SandboxResult.Success {
+			errorFeedback.WriteString(fmt.Sprintf("=== %s/%s (exit code %d) ===\n%s\n\n",
+				c.Patch.Provider, c.Patch.Model, c.SandboxResult.ExitCode,
+				truncate(c.SandboxResult.Logs, 2000)))
+		}
+	}
+	errorFeedback.WriteString("\nPlease fix your code based on these errors. Return ONLY the corrected code in a markdown code block.")
+
+	healPrompt := errorFeedback.String()
+
+	// Re-query all solvers with the error feedback
+	newPatches := llm.FanOut(e.solvers, healPrompt, e.onEvent)
+	if len(newPatches) == 0 {
+		report.Summary = fmt.Sprintf("Self-healing round %d produced no patches", round)
+		report.Candidates = failedCandidates
+		return report
+	}
+
+	// Build new candidates and run through safety + sandbox again
+	newCandidates := make([]*Candidate, 0, len(newPatches))
+	for _, p := range newPatches {
+		c := &Candidate{Patch: p}
+		c.SafetyResult = validation.ValidatePythonPatch(c.Patch.Code)
+		if !c.SafetyResult.OK {
+			c.Blocked = true
+			continue
+		}
+
+		name := fmt.Sprintf("%s/%s", c.Patch.Provider, c.Patch.Model)
+		e.emit(fmt.Sprintf("  🔄 Re-testing %s (healed)...", name))
+
+		result, err := e.sandbox.RunVerification(c.Patch.Code, testScript)
+		if err != nil {
+			c.SandboxResult = &sandbox.Result{Success: false, Logs: err.Error()}
+			c.Eliminated = true
+		} else {
+			c.SandboxResult = result
+			if result.Success {
+				c.SandboxScore = scoreSandboxPerformance(result)
+				e.emit(fmt.Sprintf("  ✅ %s healed successfully! (score: %.1f)", name, c.SandboxScore))
+			} else {
+				c.Eliminated = true
+				e.emit(fmt.Sprintf("  ❌ %s still failing after healing", name))
+			}
+		}
+		newCandidates = append(newCandidates, c)
+	}
+
+	passing := filterPassing(newCandidates)
+	if len(passing) == 0 {
+		// Recurse for another round
+		return e.selfHeal(newCandidates, testScript, report, round+1)
+	}
+
+	// Healed patches exist — continue with Phase 3 + 4
+	e.emit("🎉 **Self-healing succeeded!** Continuing with consensus...")
+
+	// Run structural similarity and judge on the healed patches
+	// (reuse the same logic from Evaluate)
+	fingerprints := map[string][]*Candidate{}
+	for _, c := range passing {
+		fp := validation.StructuralFingerprint(c.Patch.Code)
+		fingerprints[fp] = append(fingerprints[fp], c)
+	}
+	maxCluster := 0
+	for _, cluster := range fingerprints {
+		if len(cluster) > maxCluster {
+			maxCluster = len(cluster)
+		}
+	}
+	for _, cluster := range fingerprints {
+		score := 100.0
+		if maxCluster > 1 {
+			score = (float64(len(cluster)) / float64(maxCluster)) * 100.0
+		}
+		for _, c := range cluster {
+			c.StructuralScore = score
+		}
+	}
+
+	e.runJudgePhase(passing)
+
+	for _, c := range passing {
+		c.FinalScore = (c.SandboxScore * WeightSandbox) +
+			(c.StructuralScore * WeightStructural) +
+			(c.JudgeScore * WeightJudge)
+	}
+
+	sort.Slice(passing, func(i, j int) bool {
+		return passing[i].FinalScore > passing[j].FinalScore
+	})
+
+	report.Winner = passing[0]
+	report.PassedSandbox = len(passing)
+	report.UniqueStructures = len(fingerprints)
+	report.Candidates = append(failedCandidates, newCandidates...)
+	report.Summary = fmt.Sprintf("=== RAVENMIND CONSENSUS (healed in round %d) ===\n🏆 Winner: %s/%s (score: %.1f)\n",
+		round, report.Winner.Patch.Provider, report.Winner.Patch.Model, report.Winner.FinalScore)
+
+	e.emit(fmt.Sprintf("🏆 **Winner (healed):** %s/%s with score %.1f",
+		report.Winner.Patch.Provider, report.Winner.Patch.Model, report.Winner.FinalScore))
+	return report
+}
+

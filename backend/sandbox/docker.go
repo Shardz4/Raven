@@ -186,11 +186,62 @@ func (m *Manager) copyToContainer(ctx context.Context, containerID, filename, co
 	return m.client.CopyToContainer(ctx, containerID, "/app", &buf, container.CopyToContainerOptions{})
 }
 
-// BuildTestScript generates the bash script that clones the repo and runs tests.
+// BuildTestScript generates the bash script that clones the repo and runs tests (Python).
 func BuildTestScript(cloneURL string) string {
-	return fmt.Sprintf(`#!/bin/bash
+	return BuildTestScriptForLanguage(cloneURL, "python")
+}
+
+// BuildTestScriptForLanguage generates a language-aware test script for sandbox verification.
+func BuildTestScriptForLanguage(cloneURL, language string) string {
+	switch language {
+	case "go", "golang":
+		return fmt.Sprintf(`#!/bin/bash
 set -e
-echo "=== Raven Sandbox Verification ==="
+echo "=== Raven Sandbox Verification (Go) ==="
+echo "Cloning: %s"
+git clone --depth 1 %s target_repo || exit 1
+cd target_repo
+echo "Applying AI-generated patch..."
+cp /app/solution.go .
+echo "Running Go tests..."
+go test ./... -v -count=1 2>&1
+echo "=== Verification Complete ==="
+`, cloneURL, cloneURL)
+
+	case "javascript", "typescript", "js", "ts":
+		return fmt.Sprintf(`#!/bin/bash
+set -e
+echo "=== Raven Sandbox Verification (JavaScript) ==="
+echo "Cloning: %s"
+git clone --depth 1 %s target_repo || exit 1
+cd target_repo
+echo "Applying AI-generated patch..."
+cp /app/solution.js .
+echo "Installing dependencies..."
+if [ -f package.json ]; then npm install --silent; fi
+echo "Running tests..."
+if [ -f package.json ]; then npm test 2>&1; else node solution.js; fi
+echo "=== Verification Complete ==="
+`, cloneURL, cloneURL)
+
+	case "rust":
+		return fmt.Sprintf(`#!/bin/bash
+set -e
+echo "=== Raven Sandbox Verification (Rust) ==="
+echo "Cloning: %s"
+git clone --depth 1 %s target_repo || exit 1
+cd target_repo
+echo "Applying AI-generated patch..."
+cp /app/solution.rs src/
+echo "Running Rust tests..."
+cargo test 2>&1
+echo "=== Verification Complete ==="
+`, cloneURL, cloneURL)
+
+	default: // python
+		return fmt.Sprintf(`#!/bin/bash
+set -e
+echo "=== Raven Sandbox Verification (Python) ==="
 echo "Cloning: %s"
 git clone --depth 1 %s target_repo || exit 1
 cd target_repo
@@ -202,6 +253,7 @@ echo "Running tests..."
 python -m pytest -q --tb=short 2>&1
 echo "=== Verification Complete ==="
 `, cloneURL, cloneURL)
+	}
 }
 
 // Close releases the Docker client resources.

@@ -1,19 +1,15 @@
-# 🪶 Raven – Autonomous Web3 Bounty Hunter
-
-
-## migerating from coretesnsor in a few while
-
+# 🪶 Raven – Autonomous AI Developer
 
 <div align="center">
   <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop" alt="Raven Minimal Banner" width="100%" height="150" style="border-radius: 10px; margin-bottom: 20px; object-fit: cover;">
 </div>
 
-**Raven is an autonomous AI agent built for the Cortensor Hackathon that finds, patches, and monetizes GitHub issues on autopilot.**
+**Raven is an autonomous AI agent that finds, patches, and verifies GitHub issues on autopilot.**
 
-Unlike traditional AI coding assistants, Raven operates as a complete decentralized marketplace:
-1. **Delegates** open Github issues to real Cortensor miners.
+Unlike traditional AI coding assistants, Raven operates as a completely autonomous pipeline:
+1. **Delegates** open Github issues to leading AI Models (OpenAI, Claude, DeepSeek, etc.).
 2. **Verifies** the AI-generated patches in an isolated, dynamic Docker sandbox.
-3. **Monetizes** the verified code patch behind an on-chain **x402 MetaMask payment gateway**.
+3. **Presents** the verified source code patch, ready to be merged.
 
 ---
 
@@ -22,47 +18,48 @@ Unlike traditional AI coding assistants, Raven operates as a complete decentrali
 ```mermaid
 graph TD
     A[User] -->|Pastes Issue URL| B(🪶 Raven Agent)
-    B -->|Broadcast to Miners| C{Cortensor Network}
+    B -->|Broadcast to AI Models| C{LLM Providers}
     C -->|Patch 1| D[Docker Sandbox]
     C -->|Patch 2| D
     C -->|Patch 3| D
     D -->|Test Results| E{Verification Consensus}
-    E -->|Selects Best Fix| F[x402 Payment Rails]
-    F -->|Locks File| G[MetaMask Prompt]
-    G -->|User Pays 5 USDC| H((Patch Unlocked))
+    E -->|Selects Best Fix| F[Extracts Patch & Reason]
+    F -->|Displays Code| G((Resolution Complete))
 
-    classDef core fill:#0d1117,stroke:#5cf0ff,stroke-width:2px;
+    classDef core fill:#0d1117,stroke:#58a6ff,stroke-width:2px;
     classDef network fill:#161b22,stroke:#8b949e,stroke-width:1px;
     classDef success fill:#1f6b39,stroke:#2ea043,stroke-width:2px;
     
     class A,B,E core;
     class C,D,F network;
-    class G,H success;
+    class G success;
 ```
 
 ---
 
 ## ⚡ Quickstart
 
-We've made Raven incredibly easy to test.
+We've made Raven incredibly easy to use.
 
 1. **Install requirements:**
 ```bash
 pip install -r requirements.txt
 ```
 
-2. **Run the Dashboard:**
+2. **Configure Provider Keys:**
+Copy `.env.example` to `.env` and add your API keys (e.g. `OPENAI_API_KEY`).
+
+3. **Run the Dashboard:**
 ```bash
 streamlit run app.py
 ```
 
-3. **Test the Flow:**
-Navigate to the **Simulate Demo** tab in the UI. Click "Run Simulation", watch the live terminal evaluate miner patches, and then click **"Connect MetaMask & Pay"** to see the real x402 Web3 payment prompt in action!
+4. **Run the Agent:**
+Enter your GitHub issue URL, click "Start Resolution," and watch Raven coordinate models to verify the fix locally via Docker.
 
 ---
 
 ## 🛡️ Proof of Work
 
-* **Real Docker Environments:** Our sandbox dynamically clones the target GitHub repository and runs native `pytest` to ensure patches actually compile and run, instead of generating simulated text responses.
-* **On-Chain Ready:** The `Pay via x402` button hooks directly into `window.ethereum` to prompt standard Ethers.js transaction signatures from user wallets.
-* **Live Network:** By default, `.env` is configured to route prompts to a live Cortensor Web2 API Router Node (`RAVEN_MINER_MODE=cortensor`).
+* **Real Docker Environments:** Our sandbox dynamically clones the target GitHub repository and runs native tests to ensure patches actually compile and run, instead of generating simulated text responses.
+* **Model Agnostic:** Plug in any LLM available (GPT-4, Claude 3.5, etc) to find the consensus solver.

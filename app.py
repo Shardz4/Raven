@@ -1,32 +1,16 @@
 import os
 import time
 import requests
-import streamlit.components.v1 as components
 from datetime import datetime
 
 import streamlit as st
 from streamlit_lottie import st_lottie
 
 from agent.coordinator import AgentCoordinator
-from agent.cortensor_live import CortensorLiveNetwork
-from agent.cortensor_production import CortensorNetwork as ProductionMinerNetwork
+from agent.llm_provider import LLMFactory
 
-st.set_page_config(page_title="Raven – Autonomous Bounty Hunter", page_icon="🪶", layout="wide")
+st.set_page_config(page_title="Raven – Autonomous AI Developer", page_icon="🪶", layout="wide")
 
-def _effective_miner_mode() -> str:
-    raw = (os.getenv("RAVEN_MINER_MODE") or "").strip().lower()
-    if raw:
-        return raw
-    # Default to Cortensor live network
-    return "cortensor"
-
-
-def _miner_mode_label(mode: str) -> str:
-    if mode == "cortensor":
-        return "Cortensor (live)"
-    if mode == "production":
-        return "Production LLMs"
-    return "Cortensor (live)"  # Fallback to Cortensor
 
 @st.cache_data
 def load_lottieurl(url: str):
@@ -38,145 +22,72 @@ def load_lottieurl(url: str):
     except Exception:
         return None
 
-# --- Extreme Aesthetic CSS Overhaul ---
+# Clean Dark Mode SaaS CSS
 st.markdown("""
 <style>
-    /* Global Background and Typography */
     .stApp {
-        background-color: #050a0f;
+        background-color: #0d1117;
         color: #c9d1d9;
-        font-family: 'Courier New', Courier, monospace;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
-    
-    /* Very Subtle CRT Overlay for Texture */
-    .stApp::after {
-        content: " ";
-        display: block;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.05) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.01), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.01));
-        background-size: 100% 2px, 2px 100%;
-        z-index: 100;
-        pointer-events: none;
-    }
-
-    /* Clean Headers (No Glitch) */
     h1, h2, h3 {
-        color: #5cf0ff !important;
-        text-shadow: 0 0 5px rgba(92, 240, 255, 0.3);
+        color: #58a6ff !important;
+        font-family: 'Inter', sans-serif;
     }
-
-    /* Animated Neon Buttons */
     .stButton>button {
-        background: linear-gradient(90deg, #1f6feb, #388bfd);
+        background-color: #238636;
         color: white;
-        border: 1px solid #58a6ff;
-        border-radius: 8px;
-        box-shadow: 0 0 15px rgba(56, 139, 253, 0.4);
-        transition: all 0.3s ease;
-        text-transform: uppercase;
-        font-weight: bold;
-        letter-spacing: 1px;
+        border: 1px solid rgba(240, 246, 252, 0.1);
+        border-radius: 6px;
+        transition: all 0.2s ease;
+        font-weight: 600;
     }
     .stButton>button:hover {
-        background: linear-gradient(90deg, #388bfd, #58a6ff);
-        box-shadow: 0 0 25px rgba(88, 166, 255, 0.8);
-        transform: translateY(-2px);
+        background-color: #2ea043;
+        border-color: rgba(240, 246, 252, 0.1);
     }
-    
-    /* Cyberpunk Inputs */
     .stTextInput>div>div>input {
         background-color: #161b22;
-        color: #5cf0ff;
+        color: #c9d1d9;
         border: 1px solid #30363d;
-        border-radius: 4px;
-        font-family: monospace;
+        border-radius: 6px;
     }
-    .stTextInput>div>div>input:focus {
-        border-color: #58a6ff;
-        box-shadow: 0 0 10px rgba(88, 166, 255, 0.3);
-    }
-
-    /* Glassmorphism Containers */
     div[data-testid="stExpander"] {
-        background: rgba(22, 27, 34, 0.6);
-        border: 1px solid rgba(48, 54, 61, 0.8);
-        backdrop-filter: blur(10px);
-        border-radius: 10px;
-    }
-
-    /* The x402 Payment Box */
-    .payment-box {
-        padding: 25px;
-        border-radius: 12px;
-        background: linear-gradient(145deg, rgba(23, 27, 34, 0.9), rgba(13, 17, 23, 0.9));
-        border: 1px solid #e3b341;
-        box-shadow: 0 0 20px rgba(227, 179, 65, 0.2);
-        text-align: center;
-        animation: pulse-border 2s infinite;
-    }
-    .payment-box h1 {
-        color: #e3b341 !important;
-        text-shadow: 0 0 15px rgba(227, 179, 65, 0.5);
-        font-size: 3rem;
-        margin: 10px 0;
-    }
-    
-    /* Custom Hacker Terminal Logs */
-    .hacker-terminal {
-        background-color: #000000;
+        background: #161b22;
         border: 1px solid #30363d;
-        border-left: 3px solid #2ea043;
-        color: #3fb950;
-        font-family: 'Consolas', 'Courier New', monospace;
-        padding: 15px;
-        border-radius: 5px;
-        height: 250px;
+        border-radius: 6px;
+    }
+    .console-terminal {
+        background-color: #010409;
+        border: 1px solid #30363d;
+        color: #e6edf3;
+        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+        padding: 16px;
+        border-radius: 6px;
+        height: 300px;
         overflow-y: auto;
-        box-shadow: inset 0 0 15px rgba(46, 160, 67, 0.1);
         margin-bottom: 20px;
+        font-size: 13px;
     }
-    .terminal-line {
-        margin: 2px 0;
-        line-height: 1.4;
-    }
-    .terminal-time {
-        color: #8b949e;
-        margin-right: 10px;
-    }
-    
-    /* Metrics */
-    div[data-testid="stMetricValue"] {
-        color: #5cf0ff !important;
-        text-shadow: 0 0 8px rgba(92, 240, 255, 0.4);
-    }
-
-    @keyframes pulse-border {
-        0% { box-shadow: 0 0 15px rgba(227, 179, 65, 0.2); }
-        50% { box-shadow: 0 0 30px rgba(227, 179, 65, 0.5); }
-        100% { box-shadow: 0 0 15px rgba(227, 179, 65, 0.2); }
-    }
+    .terminal-line { margin: 4px 0; }
+    .terminal-time { color: #8b949e; margin-right: 8px; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🪶 Raven: Autonomous Bounty Hunter")
-st.markdown("### Delegate. Execute. Verify. Monetize.")
+st.title("🪶 Raven: Autonomous AI Developer")
+st.markdown("### Resolve GitHub Issues Instantly using Ensembles of AI Models")
 
 with st.sidebar:
-    st.header("Raven Status")
-    mode = _effective_miner_mode()
-    st.markdown(f"🟢 **Miner Network:** {_miner_mode_label(mode)}")
+    st.header("System Status")
+    providers = LLMFactory.create_all()
+    st.markdown(f"🟢 **Available AI Models:** {len(providers)}")
+    for name in providers.keys():
+        st.caption(f"- `{name}`")
     st.markdown("🟢 **Docker Sandbox:** Ready")
-    st.markdown("🟠 **x402 Gateway:** Active (Testnet)")
     st.divider()
-    if mode == "cortensor":
-        st.caption(f"Router: `{os.getenv('CORTENSOR_ROUTER_URL') or 'http://localhost:5010'}`")
-    st.info("Raven delegates to miners, verifies patches in a Docker sandbox, and locks the winning fix behind an x402-style payment gate.")
+    st.info("Raven coordinates top LLMs to autonomously resolve GitHub issues. It writes code, tests it dynamically in a Docker container, and presents the best validated patch.")
 
-tab_run, tab_demo_simulate, tab_dashboard, tab_bots, tab_security = st.tabs(["Run", "Simulate Demo", "Dashboard", "Bots", "Security"])
+tab_run, tab_dashboard, tab_bots = st.tabs(["Run Agent", "Dashboard", "Integrations"])
 
 if "runs" not in st.session_state:
     st.session_state["runs"] = []
@@ -184,8 +95,8 @@ if "runs" not in st.session_state:
 with tab_run:
     c1, c2 = st.columns([3, 1])
     with c1:
-        issue_url = st.text_input("Enter GitHub Issue URL", "https://github.com/cortensor/protocol/issues/101")
-        run_btn = st.button("🔫 Start Bounty Hunt", type="primary")
+        issue_url = st.text_input("Enter GitHub Issue URL", "https://github.com/microsoft/vscode/issues/101")
+        run_btn = st.button("🚀 Start Resolution", type="primary")
     with c2:
         lottie_ai = load_lottieurl("https://assets9.lottiefiles.com/packages/lf20_tno6cg2w.json")
         if lottie_ai:
@@ -205,14 +116,13 @@ with tab_run:
         status_box = st.empty()
         result_box = st.container()
         
-        # Terminal UI Container
-        st.markdown("### 📡 Live Agent Console")
+        st.markdown("### 📡 Live Execution Console")
         terminal_placeholder = st.empty()
         logs = []
 
         def render_terminal():
-            log_divs = "".join([f"<div class='terminal-line'><span class='terminal-time'>[{time.strftime('%H:%M:%S')}]</span> >_ {line}</div>" for line in logs])
-            terminal_html = f"<div class='hacker-terminal'>{log_divs}</div>"
+            log_divs = "".join([f"<div class='terminal-line'><span class='terminal-time'>[{time.strftime('%H:%M:%S')}]</span> {line}</div>" for line in logs])
+            terminal_html = f"<div class='console-terminal'>{log_divs}</div>"
             terminal_placeholder.markdown(terminal_html, unsafe_allow_html=True)
 
         for msg_type, data in agent.solve_issue(issue_url):
@@ -225,293 +135,46 @@ with tab_run:
 
             elif msg_type == "complete":
                 status_box = st.empty()
-                status_box.success("✅ Raven Workflow Complete!")
+                status_box.success(f"✅ Raven Workflow Complete! Patch generated by **{data.get('winner')}**")
                 st.balloons()
 
                 st.session_state["runs"].insert(
                     0,
                     {
                         "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "mode": _miner_mode_label(_effective_miner_mode()),
+                        "issue": issue_url,
                         "winner": data.get("winner"),
-                        "invoice_id": data.get("invoice_id"),
                     },
                 )
 
                 with result_box:
                     st.divider()
-                    c1, c2 = st.columns([1, 1])
-
-                    with c1:
-                        st.subheader("📜 Verification Certificate")
+                    st.subheader("🎉 Verified Patch")
+                    st.markdown(data.get("explanation", ""))
+                    st.code(data.get("code", ""), language="python")
+                    
+                    with st.expander("Show Sandbox Verification Logs"):
                         st.code(data["verification_logs"], language="text")
-                        st.caption(f"Winner: {data['winner']}")
-
-                    with c2:
-                        st.subheader("💰 x402 Payment Gate")
-                        st.caption("*(Hackathon Demo: Settle invoice to unlock the verified patch source code)*")
-                        st.markdown(
-                            f"""
-                            <div class="payment-box">
-                                <h3>Payment Required</h3>
-                                <p>To unlock the source code, please settle the invoice.</p>
-                                <h1>5.00 USDC</h1>
-                                <small>Invoice ID: {data['invoice_id']}</small>
-                            </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
-                        components.html(
-                            """
-                            <button id="pay-btn-run" onclick="payWithMetaMask()" style="width: 100%; border-radius: 6px; padding: 12px; background-color: #0d1117; color: #5cf0ff; border: 1px solid #5cf0ff; font-weight: bold; cursor: pointer; font-family: 'Courier New', monospace; transition: all 0.3s ease;">
-                                🦊 Connect MetaMask & Pay
-                            </button>
-                            <script>
-                            async function payWithMetaMask() {
-                                const btn = document.getElementById('pay-btn-run');
-                                // MetaMask injects into the top-level window; Streamlit components run in an iframe.
-                                // Try both the current window and the parent window to improve detection in embedded contexts.
-                                const eth = (window.ethereum || (window.parent && window.parent.ethereum));
-                                if (!eth) {
-                                    btn.innerText = '❌ MetaMask Not Found.';
-                                    btn.style.backgroundColor = '#aa0000';
-                                    btn.style.borderColor = '#aa0000';
-                                    btn.style.color = 'white';
-                                    return;
-                                }
-
-                                btn.innerText = '⚙️ Connecting...';
-                                btn.style.opacity = '0.8';
-
-                                try {
-                                    const accounts = await eth.request({ method: 'eth_requestAccounts' });
-                                    const account = accounts[0];
-                                    btn.innerText = '✍️ Requesting Signature...';
-
-                                    const msg = 'Authorize x402 payment of 5.00 USDC for Raven Code Patch decryption.';
-                                    await eth.request({
-                                        method: 'personal_sign',
-                                        params: [msg, account]
-                                    });
-
-                                    btn.innerText = '✅ Payment Confirmed! Patch Decrypted!';
-                                    btn.style.backgroundColor = '#1f6b39';
-                                    btn.style.borderColor = '#2ea043';
-                                    btn.style.color = 'white';
-                                    btn.style.opacity = '1';
-                                } catch (error) {
-                                    btn.innerText = '❌ Payment Rejected';
-                                    btn.style.backgroundColor = '#aa0000';
-                                    btn.style.borderColor = '#aa0000';
-                                    btn.style.color = 'white';
-                                    btn.style.opacity = '1';
-                                }
-                            }
-                            </script>
-                            """,
-                            height=65
-                        )
-
-with tab_demo_simulate:
-    st.subheader("🎭 Presentation Demo Simulator")
-    
-    c1, c2 = st.columns([3, 1])
-    with c1:
-        if "demo_url_input" not in st.session_state:
-            st.session_state["demo_url_input"] = "https://github.com/cortensor/protocol/issues/101"
-
-        with st.expander("✨ Quick Demo Scenarios", expanded=True):
-            st.markdown("Click to load a scenario for your live demo.")
-            sc1, sc2, sc3 = st.columns(3)
-            if sc1.button("Reentrancy Bug"):
-                st.session_state["demo_url_input"] = "https://github.com/demo-project/issues/reentrancy"
-            if sc2.button("Memory Leak"):
-                st.session_state["demo_url_input"] = "https://github.com/demo-project/issues/memory-leak"
-            if sc3.button("Default Setup"):
-                st.session_state["demo_url_input"] = "https://github.com/cortensor/protocol/issues/101"
-
-        demo_issue_url = st.text_input("Simulate Issue URL", key="demo_url_input")
-        demo_run_btn = st.button("🎭 Run Simulation", type="primary")
-
-    with c2:
-        lottie_hacker = load_lottieurl("https://assets9.lottiefiles.com/packages/lf20_tno6cg2w.json")
-        if lottie_hacker:
-            st_lottie(lottie_hacker, height=150, key="sim_header_anim")
-
-    if demo_run_btn:
-        import uuid
-        status_box = st.empty()
-        result_box = st.container()
-        st.markdown("### 📡 Live Simulation Console")
-        terminal_placeholder = st.empty()
-        logs = []
-
-        def render_terminal():
-            log_divs = "".join([f"<div class='terminal-line'><span class='terminal-time'>[{time.strftime('%H:%M:%S')}]</span> >_ {line}</div>" for line in logs])
-            terminal_html = f"<div class='hacker-terminal'>{log_divs}</div>"
-            terminal_placeholder.markdown(terminal_html, unsafe_allow_html=True)
-
-        def _log(msg):
-            logs.append(msg)
-            render_terminal()
-            time.sleep(0.8)
-
-        _log(f"🔍 **Analyzing Issue:** {demo_issue_url}")
-        _log(f"📡 **Delegating to Miner Network:** Requesting 3 redundant solutions...")
-        time.sleep(1)
-        
-        miner_winners = ["Miner-0x4a92", "Miner-0x9f1b", "Miner-0x2cc8"]
-        for m in miner_winners:
-            _log(f"📦 Patch received from **{m}**")
-            
-        _log("🛡️ **Starting Verification:** Validating patches + running Docker sandbox...")
-        
-        test_logs = []
-        for m in miner_winners:
-            _log(f"Testing Patch from **{m}**...")
-            if m == "Miner-0x9f1b":
-                test_logs.append(f"Miner: {m}\\nResult: FAIL\\nLogs: build failed\\n---")
-            else:
-                test_logs.append(f"Miner: {m}\\nResult: PASS\\nLogs: all tests cleared\\n---")
-                
-        winner = "Miner-0x4a92"
-        _log("=== CONSENSUS ===")
-        _log(f"Selected winner: {winner}")
-        
-        _log(f"🏆 **Winner Found:** {winner}. Creating x402 Lock...")
-        status_box.success("✅ Raven Workflow Complete!")
-        
-        inv_id = str(uuid.uuid4())[:8]
-        st.session_state["runs"].insert(0, {
-            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "mode": "Simulation (Demo)",
-            "winner": winner,
-            "invoice_id": f"inv_{inv_id}",
-        })
-
-        with result_box:
-            st.divider()
-            c1, c2 = st.columns([1, 1])
-            with c1:
-                st.subheader("📜 Verification Certificate")
-                st.code("\\n".join(test_logs), language="text")
-                st.caption(f"Winner: {winner}")
-            with c2:
-                st.subheader("💰 x402 Payment Gate")
-                st.caption("*(Hackathon Demo: Settle invoice to unlock the verified patch source code)*")
-                st.markdown(
-                    f'''
-                    <div class="payment-box">
-                        <h3>Payment Required</h3>
-                        <p>To unlock the source code, please settle the invoice.</p>
-                        <h1>5.00 USDC</h1>
-                        <small>Invoice ID: inv_{inv_id}</small>
-                    </div>
-                    ''',
-                    unsafe_allow_html=True,
-                )
-                components.html(
-                    """
-                    <button id="pay-btn-sim" onclick="payWithMetaMaskSim()" style="width: 100%; border-radius: 6px; padding: 12px; background-color: #0d1117; color: #5cf0ff; border: 1px solid #5cf0ff; font-weight: bold; cursor: pointer; font-family: 'Courier New', monospace; transition: all 0.3s ease;">
-                        🦊 Connect MetaMask & Pay
-                    </button>
-                    <script>
-                    async function payWithMetaMaskSim() {
-                        const btn = document.getElementById('pay-btn-sim');
-                        // Try parent window injection as well (Streamlit iframe contexts).
-                        const eth = (window.ethereum || (window.parent && window.parent.ethereum));
-                        if (!eth) {
-                            btn.innerText = '❌ MetaMask Not Found.';
-                            btn.style.backgroundColor = '#aa0000';
-                            btn.style.borderColor = '#aa0000';
-                            btn.style.color = 'white';
-                            return;
-                        }
-
-                        btn.innerText = '⚙️ Connecting...';
-                        btn.style.opacity = '0.8';
-
-                        try {
-                            const accounts = await eth.request({ method: 'eth_requestAccounts' });
-                            const account = accounts[0];
-                            btn.innerText = '✍️ Requesting Signature...';
-
-                            const msg = 'Authorize x402 payment of 5.00 USDC for Raven Code Patch decryption.';
-                            await eth.request({
-                                method: 'personal_sign',
-                                params: [msg, account]
-                            });
-
-                            btn.innerText = '✅ Payment Confirmed! Patch Decrypted!';
-                            btn.style.backgroundColor = '#1f6b39';
-                            btn.style.borderColor = '#2ea043';
-                            btn.style.color = 'white';
-                            btn.style.opacity = '1';
-                        } catch (error) {
-                            btn.innerText = '❌ Payment Rejected';
-                            btn.style.backgroundColor = '#aa0000';
-                            btn.style.borderColor = '#aa0000';
-                            btn.style.color = 'white';
-                            btn.style.opacity = '1';
-                        }
-                    }
-                    </script>
-                    """,
-                    height=65
-                )
-                
 
 with tab_dashboard:
-    st.subheader("📡 Network Dashboard")
-    mode = _effective_miner_mode()
+    st.subheader("📊 Execution Dashboard")
     
-    # Render interactive Lottie animation
-    lottie_network = load_lottieurl("https://assets9.lottiefiles.com/packages/lf20_tno6cg2w.json")
-    if lottie_network:
-        st_lottie(lottie_network, height=200, key="network_anim")
-
-    # Hackathon Demo Polish: Fake lively metrics
     m1, m2, m3 = st.columns(3)
-    m1.metric("Active Miners", "420", "+12 today")
-    m2.metric("Network Latency", "1.2s", "-0.1s")
-    m3.metric("Total Bounties Paid", "$14,050", "+$500")
+    m1.metric("Configured Models", str(len(LLMFactory.create_all())))
+    m2.metric("Total Issues Resolved", str(len(st.session_state["runs"])))
+    m3.metric("Docker Node", "Healthy")
     
-    st.caption(f"Mode: **{_miner_mode_label(mode)}**")
-
-    if mode == "cortensor":
-        try:
-            net = CortensorLiveNetwork()
-            st.json(net.get_network_status())
-        except Exception as e:
-            st.error(f"Failed to query Cortensor Router: {e}")
-            st.info("💡 Make sure CORTENSOR_ROUTER_URL and CORTENSOR_API_KEY are set in .env")
-    elif mode == "production":
-        try:
-            net = ProductionMinerNetwork()
-            st.json(net.get_network_status())
-        except Exception as e:
-            st.error(f"Failed to initialize production miners: {e}")
-    else:
-        # Fallback to Cortensor
-        try:
-            net = CortensorLiveNetwork()
-            st.json(net.get_network_status())
-        except Exception as e:
-            st.error(f"Failed to query Cortensor Router: {e}")
-            st.info("💡 Make sure CORTENSOR_ROUTER_URL and CORTENSOR_API_KEY are set in .env")
-
     st.divider()
-    st.subheader("🧾 Recent Runs")
+    st.subheader("🧾 Recent Resolutions")
     if st.session_state["runs"]:
         st.dataframe(st.session_state["runs"], use_container_width=True, hide_index=True)
     else:
-        st.caption("No runs yet.")
+        st.caption("No resolution runs yet.")
 
 with tab_bots:
-    st.subheader("🤖 Bots (Telegram + Discord)")
-    st.markdown("Run Raven from chat by sending a GitHub issue URL.")
+    st.subheader("🤖 Integrations")
+    st.markdown("Run Raven from chat by sending a GitHub issue URL to your automated integrations.")
     st.markdown("Set one or both tokens in `.env`, then run the scripts from the repo root.")
-
     st.code(
         "\n".join(
             [
@@ -523,10 +186,5 @@ with tab_bots:
                 "python bots/discord_bot.py",
             ]
         ),
-        language="text",
+        language="bash",
     )
-
-with tab_security:
-    st.subheader("🔒 Security Demos")
-    st.markdown("Run the interactive vulnerability demos:")
-    st.code("python DEMO_EXPLOITS.py", language="text")

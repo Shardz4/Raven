@@ -53,27 +53,39 @@ func BuildProviders(cfg *config.Config) (solvers []Provider, judge Provider, err
 }
 
 func buildJudge(cfg *config.Config, solvers []Provider) (Provider, error) {
+	// judgeMaxTokens is lower than solver max tokens because the judge
+	// only needs to return a small JSON array of scores, not full code.
+	const judgeMaxTokens = 512
+
 	switch cfg.JudgeProvider {
 	case "openai":
 		if cfg.OpenAIKey == "" {
 			return nil, fmt.Errorf("OPENAI_API_KEY required for openai judge")
 		}
-		return NewOpenAI(cfg.OpenAIKey, cfg.JudgeModel), nil
+		p := NewOpenAI(cfg.OpenAIKey, cfg.JudgeModel)
+		p.MaxTokens = judgeMaxTokens
+		return p, nil
 	case "anthropic":
 		if cfg.AnthropicKey == "" {
 			return nil, fmt.Errorf("ANTHROPIC_API_KEY required for anthropic judge")
 		}
-		return NewAnthropic(cfg.AnthropicKey, cfg.JudgeModel), nil
+		p := NewAnthropic(cfg.AnthropicKey, cfg.JudgeModel)
+		p.MaxTokens = judgeMaxTokens
+		return p, nil
 	case "deepseek":
 		if cfg.DeepSeekKey == "" {
 			return nil, fmt.Errorf("DEEPSEEK_API_KEY required for deepseek judge")
 		}
-		return NewDeepSeek(cfg.DeepSeekKey, cfg.JudgeModel), nil
+		p := NewDeepSeek(cfg.DeepSeekKey, cfg.JudgeModel)
+		p.inner.MaxTokens = judgeMaxTokens
+		return p, nil
 	case "grok":
 		if cfg.GrokKey == "" {
 			return nil, fmt.Errorf("XAI_API_KEY required for grok judge")
 		}
-		return NewGrok(cfg.GrokKey, cfg.JudgeModel), nil
+		p := NewGrok(cfg.GrokKey, cfg.JudgeModel)
+		p.inner.MaxTokens = judgeMaxTokens
+		return p, nil
 	case "custom":
 		// Custom endpoint — plug in your own fine-tuned model
 		if cfg.CustomJudgeURL == "" {

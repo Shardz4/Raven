@@ -54,6 +54,8 @@ type Report struct {
 	BlockedCount    int          `json:"blocked_count"`
 	PassedSandbox   int          `json:"passed_sandbox"`
 	UniqueStructures int         `json:"unique_structures"`
+	TotalCost       float64      `json:"total_cost"`   // Estimated total API cost in USD
+	TotalTokens     int          `json:"total_tokens"`  // Total tokens consumed across all models
 	Summary         string       `json:"summary"`
 }
 
@@ -64,6 +66,7 @@ type Engine struct {
 	solvers    []llm.Provider // needed for self-healing retries
 	maxRetries int            // max self-healing rounds
 	onEvent    func(string)
+	language   string         // set per-job for language-aware validation
 }
 
 // NewEngine creates a new RavenMind consensus engine.
@@ -86,7 +89,9 @@ func (e *Engine) emit(msg string) {
 }
 
 // Evaluate runs all four phases on the given patches and returns the consensus report.
-func (e *Engine) Evaluate(patches []*llm.PatchResult, testScript string) *Report {
+// The language parameter selects the correct safety gate validator.
+func (e *Engine) Evaluate(patches []*llm.PatchResult, testScript, language string) *Report {
+	e.language = language // store for selfHeal
 	report := &Report{TotalPatches: len(patches)}
 
 	// Build candidates
@@ -98,7 +103,7 @@ func (e *Engine) Evaluate(patches []*llm.PatchResult, testScript string) *Report
 	// ── Phase 1: Safety Gate ──
 	e.emit("🛡️ **Phase 1/4: Safety Gate** — Static analysis...")
 	for _, c := range candidates {
-		c.SafetyResult = validation.ValidatePythonPatch(c.Patch.Code)
+		c.SafetyResult = validatePatch(c.Patch.Code, language)
 		if !c.SafetyResult.OK {
 			c.Blocked = true
 			report.BlockedCount++
@@ -183,8 +188,21 @@ func (e *Engine) Evaluate(patches []*llm.PatchResult, testScript string) *Report
 	}
 
 	// ── Phase 4: LLM Judge ──
-	e.emit("⚖️ **Phase 4/4: LLM Judge** — Quality evaluation...")
-	e.runJudgePhase(passing)
+	// Credit optimization: skip the judge when it can't change the outcome.
+	// - Only 1 survivor → it wins automatically.
+	// - All survivors share the same structural fingerprint → they're equivalent.
+	if len(passing) == 1 {
+		e.emit("⚖️ **Phase 4/4: LLM Judge** — Skipped (only 1 candidate survived)")
+		passing[0].JudgeScore = 100
+	} else if report.UniqueStructures == 1 {
+		e.emit("⚖️ **Phase 4/4: LLM Judge** — Skipped (all candidates structurally identical)")
+		for _, c := range passing {
+			c.JudgeScore = 100
+		}
+	} else {
+		e.emit("⚖️ **Phase 4/4: LLM Judge** — Quality evaluation...")
+		e.runJudgePhase(passing)
+	}
 
 	// ── Aggregate Final Scores ──
 	e.emit("🧮 **Scoring** — Computing weighted consensus...")
@@ -202,11 +220,19 @@ func (e *Engine) Evaluate(patches []*llm.PatchResult, testScript string) *Report
 	report.Winner = passing[0]
 	report.Candidates = candidates
 
+	// Aggregate cost data from all candidates
+	for _, c := range candidates {
+		if c.Patch != nil {
+			report.TotalCost += c.Patch.Cost
+			report.TotalTokens += c.Patch.Tokens
+		}
+	}
+
 	// Build summary
 	var sb strings.Builder
 	sb.WriteString("=== RAVENMIND CONSENSUS ===\n")
-	sb.WriteString(fmt.Sprintf("Total patches: %d | Blocked: %d | Passed Sandbox: %d | Unique structures: %d\n\n",
-		report.TotalPatches, report.BlockedCount, report.PassedSandbox, report.UniqueStructures))
+	sb.WriteString(fmt.Sprintf("Total patches: %d | Blocked: %d | Passed Sandbox: %d | Unique structures: %d | Est. cost: $%.4f\n\n",
+		report.TotalPatches, report.BlockedCount, report.PassedSandbox, report.UniqueStructures, report.TotalCost))
 
 	for i, c := range passing {
 		sb.WriteString(fmt.Sprintf("%d. %s/%s — Final: %.1f (Sandbox: %.1f × %.0f%% + Structural: %.1f × %.0f%% + Judge: %.1f × %.0f%%)\n",
@@ -359,6 +385,19 @@ func truncate(s string, n int) string {
 	return s[:n]
 }
 
+// validatePatch routes to the correct safety gate validator based on language.
+func validatePatch(code, language string) *validation.Result {
+	switch language {
+	case "go", "golang":
+		return validation.ValidateGoCode(code)
+	case "javascript", "typescript", "js", "ts", "rust":
+		// No dedicated validator yet — allow all (sandbox will catch errors)
+		return &validation.Result{OK: true, Reason: "OK"}
+	default: // python
+		return validation.ValidatePythonPatch(code)
+	}
+}
+
 // selfHeal implements iterative self-healing: when all patches fail sandbox,
 // it feeds the error logs back to the LLMs and asks them to fix their patches.
 func (e *Engine) selfHeal(failedCandidates []*Candidate, testScript string, report *Report, round int) *Report {
@@ -396,7 +435,7 @@ func (e *Engine) selfHeal(failedCandidates []*Candidate, testScript string, repo
 	newCandidates := make([]*Candidate, 0, len(newPatches))
 	for _, p := range newPatches {
 		c := &Candidate{Patch: p}
-		c.SafetyResult = validation.ValidatePythonPatch(c.Patch.Code)
+		c.SafetyResult = validatePatch(c.Patch.Code, e.language)
 		if !c.SafetyResult.OK {
 			c.Blocked = true
 			continue

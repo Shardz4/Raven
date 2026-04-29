@@ -14,6 +14,7 @@ type AnthropicProvider struct {
 	apiKey      string
 	model       string
 	temperature float64
+	MaxTokens   int // Configurable; defaults to 4096
 }
 
 // NewAnthropic creates a provider for the Anthropic Claude API.
@@ -22,6 +23,7 @@ func NewAnthropic(apiKey, model string) *AnthropicProvider {
 		apiKey:      apiKey,
 		model:       model,
 		temperature: 0.3,
+		MaxTokens:   4096,
 	}
 }
 
@@ -29,9 +31,13 @@ func (a *AnthropicProvider) Name() string  { return "anthropic" }
 func (a *AnthropicProvider) Model() string { return a.model }
 
 func (a *AnthropicProvider) GeneratePatch(prompt string) (*PatchResult, error) {
+	maxTok := a.MaxTokens
+	if maxTok <= 0 {
+		maxTok = 4096
+	}
 	body := map[string]any{
 		"model":      a.model,
-		"max_tokens": 4096,
+		"max_tokens": maxTok,
 		"messages": []map[string]string{
 			{"role": "user", "content": systemPrompt + "\n\n" + prompt},
 		},

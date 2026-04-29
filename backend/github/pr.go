@@ -18,6 +18,7 @@ type PRRequest struct {
 	Body        string
 	PatchCode   string
 	BranchName  string
+	Language    string // e.g. "python", "go", "javascript"
 }
 
 // PRResult is the outcome of the auto-PR process.
@@ -78,7 +79,8 @@ func (p *PRCreator) CreatePR(req *PRRequest) (*PRResult, error) {
 
 	// 4. Commit the patch file to the branch
 	commitMsg := fmt.Sprintf("fix: resolve issue #%d via Raven AI\n\nAutomatically generated and verified by RavenMind consensus.", req.IssueNumber)
-	if err := p.commitFile(forkOwner, req.Repo, branchName, "solution.py", req.PatchCode, commitMsg); err != nil {
+	patchFilename := solutionFilename(req.Language)
+	if err := p.commitFile(forkOwner, req.Repo, branchName, patchFilename, req.PatchCode, commitMsg); err != nil {
 		return nil, fmt.Errorf("commit: %w", err)
 	}
 
@@ -209,4 +211,20 @@ func (p *PRCreator) openPR(upstreamOwner, repo, forkOwner, branchName, baseBranc
 	}
 	url, _ := result["html_url"].(string)
 	return number, url, nil
+}
+
+// solutionFilename returns the correct output filename based on repo language.
+func solutionFilename(language string) string {
+	switch language {
+	case "go", "golang":
+		return "solution.go"
+	case "javascript", "js":
+		return "solution.js"
+	case "typescript", "ts":
+		return "solution.ts"
+	case "rust":
+		return "solution.rs"
+	default:
+		return "solution.py"
+	}
 }

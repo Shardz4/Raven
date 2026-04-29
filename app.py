@@ -238,8 +238,17 @@ with tab_run:
             st.markdown("<div class='winner-card'>", unsafe_allow_html=True)
             st.subheader("🎉 Verified Patch")
             st.markdown(result.get("explanation", ""))
-            st.code(result.get("winner_code", ""), language="python")
+            code_lang = result.get("language", "python") or "python"
+            st.code(result.get("winner_code", ""), language=code_lang)
             st.markdown("</div>", unsafe_allow_html=True)
+
+            # Cost metrics from consensus report
+            report = result.get("consensus_report", {})
+            if isinstance(report, dict):
+                c1, c2, c3 = st.columns(3)
+                c1.metric("💰 Est. Cost", f"${report.get('total_cost', 0):.4f}")
+                c2.metric("🔤 Tokens Used", f"{report.get('total_tokens', 0):,}")
+                c3.metric("🧬 Unique Structures", str(report.get("unique_structures", "?")))
 
             with st.expander("📊 RavenMind Consensus Report"):
                 st.code(result.get("verification_logs", ""), language="text")

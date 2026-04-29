@@ -15,6 +15,7 @@ type OpenAIProvider struct {
 	model       string
 	baseURL     string
 	temperature float64
+	MaxTokens   int // Configurable; defaults to 4096
 }
 
 // NewOpenAI creates a provider for the OpenAI API.
@@ -24,6 +25,7 @@ func NewOpenAI(apiKey, model string) *OpenAIProvider {
 		model:       model,
 		baseURL:     "https://api.openai.com",
 		temperature: 0.3,
+		MaxTokens:   4096,
 	}
 }
 
@@ -31,10 +33,14 @@ func (o *OpenAIProvider) Name() string  { return "openai" }
 func (o *OpenAIProvider) Model() string { return o.model }
 
 func (o *OpenAIProvider) GeneratePatch(prompt string) (*PatchResult, error) {
+	maxTok := o.MaxTokens
+	if maxTok <= 0 {
+		maxTok = 4096
+	}
 	body := map[string]any{
 		"model":       o.model,
 		"temperature": o.temperature,
-		"max_tokens":  4096,
+		"max_tokens":  maxTok,
 		"messages": []map[string]string{
 			{"role": "system", "content": systemPrompt},
 			{"role": "user", "content": prompt},

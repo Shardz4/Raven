@@ -310,7 +310,7 @@ func (s *Server) processJob(job *store.Job) {
 	// 6. Run RavenMind Consensus (with self-healing)
 	emit("🧠 **Starting RavenMind Consensus Engine...**")
 	engine := consensus.NewEngine(s.sandbox, s.judge, selected, s.cfg.MaxHealRetries, emit)
-	report := engine.Evaluate(patches, testScript)
+	report := engine.Evaluate(patches, testScript, job.Language)
 
 	if report.Winner == nil {
 		job.Status = "failed"
@@ -359,6 +359,7 @@ func (s *Server) processJob(job *store.Job) {
 			Owner:       issue.Owner,
 			Repo:        issue.Repo,
 			IssueNumber: issue.Number,
+			Language:    issue.Language,
 			Title:       fmt.Sprintf("fix: resolve #%d via Raven AI", issue.Number),
 			Body: fmt.Sprintf("## 🪶 Raven Auto-Fix for #%d\n\n"+
 				"**Issue:** %s\n\n"+

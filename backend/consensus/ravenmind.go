@@ -204,7 +204,7 @@ func (e *Engine) Evaluate(patches []*llm.PatchResult, testScript string) *Report
 
 	// Build summary
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("=== RAVENMIND CONSENSUS ===\n"))
+	sb.WriteString("=== RAVENMIND CONSENSUS ===\n")
 	sb.WriteString(fmt.Sprintf("Total patches: %d | Blocked: %d | Passed Sandbox: %d | Unique structures: %d\n\n",
 		report.TotalPatches, report.BlockedCount, report.PassedSandbox, report.UniqueStructures))
 

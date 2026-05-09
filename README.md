@@ -16,6 +16,7 @@
 | 🔌 **Pluggable Judge** | Bring your own fine-tuned model as the consensus judge |
 | 💾 **Persistent History** | SQLite stores all jobs, results, and leaderboard data |
 | ⚡ **Concurrent Fan-Out** | All LLMs queried in parallel via Go goroutines |
+| 🤖 **Chat Bots** | Control Raven via Telegram and Discord with live progress updates |
 
 ---
 
@@ -111,12 +112,49 @@ Or the standard OpenAI-compatible format.
 
 ---
 
+## 🤖 Chat Bots
+
+Raven can be controlled directly from **Telegram** and **Discord**. Set the bot tokens in your `.env` to enable them.
+
+### Telegram Bot
+
+1. Create a bot via [@BotFather](https://t.me/BotFather) on Telegram
+2. Set `TELEGRAM_BOT_TOKEN` in `.env`
+3. Start the backend — the bot connects automatically
+
+| Command | Description |
+|---|---|
+| `/start` | Welcome message + usage instructions |
+| `/solve <url>` | Submit a GitHub issue for AI resolution |
+| `/status <id>` | Check job status |
+| `/leaderboard` | View model win-rate rankings |
+| `/help` | List available commands |
+
+### Discord Bot
+
+1. Create an app at [Discord Developer Portal](https://discord.com/developers/applications)
+2. Add a Bot and copy the token → set `DISCORD_BOT_TOKEN` in `.env`
+3. Invite the bot to your server with `applications.commands` + `bot` scopes
+4. Start the backend — slash commands are registered automatically
+
+| Command | Description |
+|---|---|
+| `/solve <issue_url>` | Submit a GitHub issue for AI resolution |
+| `/status <job_id>` | Check job status |
+| `/leaderboard` | View model win-rate rankings |
+| `/help` | List available commands |
+
+Both bots provide **live progress updates** — messages are edited in real-time as RavenMind processes the issue.
+
+---
+
 ## 📁 Project Structure
 ```
 Raven/
 ├── backend/               # Go API server
 │   ├── main.go            # Entry point
 │   ├── api/               # REST + SSE handlers
+│   ├── bots/              # 🤖 Telegram + Discord bots
 │   ├── config/            # Centralized config
 │   ├── consensus/         # 🧠 RavenMind engine + self-healing
 │   ├── github/            # Issue fetcher + Auto PR

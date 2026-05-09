@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/Shardz4/raven/api"
+	"github.com/Shardz4/raven/bots"
 	"github.com/Shardz4/raven/config"
 	gh "github.com/Shardz4/raven/github"
 	"github.com/Shardz4/raven/llm"
@@ -66,6 +67,21 @@ func main() {
 	server := api.NewServer(cfg, db, fetcher, prCreator, solvers, judge, sb)
 	router := server.Router()
 
+	// 7. Start chat bots (if tokens configured)
+	botSvc := bots.NewService(server, cfg)
+	if cfg.TelegramToken != "" {
+		go bots.StartTelegram(cfg.TelegramToken, botSvc)
+		log.Println("✓ Telegram bot started")
+	} else {
+		log.Println("⚠ Telegram bot disabled (no TELEGRAM_BOT_TOKEN)")
+	}
+	if cfg.DiscordToken != "" {
+		go bots.StartDiscord(cfg.DiscordToken, botSvc)
+		log.Println("✓ Discord bot started")
+	} else {
+		log.Println("⚠ Discord bot disabled (no DISCORD_BOT_TOKEN)")
+	}
+
 	addr := ":" + cfg.Port
 	log.Printf("🚀 Raven API server listening on http://localhost%s", addr)
 	log.Printf("   POST /api/solve          — Submit a GitHub issue")
@@ -86,3 +102,4 @@ func main() {
 		log.Fatalf("❌ Server failed: %v", err)
 	}
 }
+

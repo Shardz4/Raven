@@ -129,7 +129,7 @@ func (s *Server) handleSolve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Start processing in the background
-	go s.processJob(job)
+	go s.ProcessJob(job)
 
 	writeJSON(w, http.StatusAccepted, map[string]any{
 		"job_id": jobID,
@@ -259,8 +259,42 @@ func (s *Server) emitEvent(jobID, message string) {
 	log.Printf("[job:%s] %s", jobID, message)
 }
 
-func (s *Server) processJob(job *store.Job) {
-	emit := func(msg string) { s.emitEvent(job.ID, msg) }
+// SubmitAndProcessJob creates a job from the given issue URL and processes it
+// in the background. The onEvent callback receives live progress messages.
+// This is the primary entry point for bots and programmatic callers.
+func (s *Server) SubmitAndProcessJob(issueURL string, onEvent func(msg string)) (string, error) {
+	jobID := uuid.New().String()[:8]
+	job := &store.Job{
+		ID:        jobID,
+		IssueURL:  issueURL,
+		Status:    "pending",
+		CreatedAt: time.Now(),
+	}
+	if err := s.store.CreateJob(job); err != nil {
+		return "", fmt.Errorf("failed to create job: %w", err)
+	}
+
+	go s.ProcessJobWithCallback(job, onEvent)
+	return jobID, nil
+}
+
+// GetStore returns the underlying store for direct queries (e.g., from bots).
+func (s *Server) GetStore() *store.Store {
+	return s.store
+}
+
+// ProcessJob processes a job using the standard SSE event emission.
+func (s *Server) ProcessJob(job *store.Job) {
+	s.ProcessJobWithCallback(job, nil)
+}
+
+func (s *Server) ProcessJobWithCallback(job *store.Job, onEvent func(msg string)) {
+	emit := func(msg string) {
+		s.emitEvent(job.ID, msg)
+		if onEvent != nil {
+			onEvent(msg)
+		}
+	}
 
 	job.Status = "running"
 	_ = s.store.UpdateJobResult(job)

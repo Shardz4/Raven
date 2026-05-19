@@ -66,7 +66,13 @@ docker build -t raven-sandbox:latest sandbox_env/
 ```
 
 ### 4. Start Frontend
+We recommend using a virtual environment (e.g., via Conda or `venv`):
 ```bash
+# Example using Conda
+conda create -n raven python=3.9 -y
+conda activate raven
+
+# Install dependencies and run
 pip install -r requirements.txt
 streamlit run app.py
 ```
@@ -75,7 +81,7 @@ streamlit run app.py
 
 ## 🔌 Custom Judge Model
 
-Plug in your own fine-tuned model as the consensus judge:
+Plug in your own fine-tuned model as the consensus judge. *(Note: If the configured judge provider is unavailable or lacks a valid API key, Raven will automatically fall back to using the first available solver model as the judge.)*
 
 ```env
 JUDGE_PROVIDER=custom

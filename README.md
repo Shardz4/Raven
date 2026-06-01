@@ -45,27 +45,47 @@ graph TD
 
 ---
 
-## ⚡ Quickstart
+## ⚡ Running Modes & Quickstart
 
-### 1. Configure
+Raven supports two execution modes via the `AGENT_MODE` environment variable:
+- **Monolithic Mode (`monolithic` - default)**: Runs all solvers, judges, safety checks, and consensus in a single Go process.
+- **Distributed Mode (`distributed`)**: Runs each stage as an independent, decoupled agent communicating via NATS JetStream.
+
+### Option A: Local Monolithic Mode (Single Process)
+
+#### 1. Configure
 ```bash
 cp .env.example .env
-# Edit .env — add at least one LLM API key
+# Edit .env — add at least one LLM API key and set AGENT_MODE=monolithic
 ```
 
-### 2. Build & Run Backend
+#### 2. Build & Run Backend
 ```bash
 cd backend
 go build -o raven.exe .
 ./raven.exe
 ```
 
-### 3. Build Docker Sandbox
+#### 3. Build Docker Sandbox
 ```bash
 docker build -t raven-sandbox:latest sandbox_env/
 ```
 
-### 4. Start Frontend
+### Option B: Distributed Multi-Agent Mode (Docker Compose)
+
+#### 1. Configure
+```bash
+cp .env.example .env
+# Edit .env — set AGENT_MODE=distributed, add keys and NATS/Store configurations
+```
+
+#### 2. Start the Multi-Agent Cluster
+```bash
+docker compose up --build
+```
+This spins up the NATS message broker, SQLite store service, Orchestrator, solver workers, safety checkers, sandbox execution runners, consensus judges, and auto-PR workers as independent container services.
+
+### 3. Start Frontend (Both Modes)
 We recommend using a virtual environment (e.g., via Conda or `venv`):
 ```bash
 # Example using Conda
@@ -157,18 +177,22 @@ Both bots provide **live progress updates** — messages are edited in real-time
 ## 📁 Project Structure
 ```
 Raven/
-├── backend/               # Go API server
-│   ├── main.go            # Entry point
+├── backend/               # Go API server & Agents code
+│   ├── main.go            # Monolithic entry point
+│   ├── Dockerfile         # Packages all agent services
 │   ├── api/               # REST + SSE handlers
+│   ├── agents/            # 🤖 Distributed Agents (Orchestrator, Solver, Safety, Sandbox, Consensus, PR, Store)
+│   ├── broker/            # 📡 NATS broker messaging schemas and client
 │   ├── bots/              # 🤖 Telegram + Discord bots
 │   ├── config/            # Centralized config
 │   ├── consensus/         # 🧠 RavenMind engine + self-healing
 │   ├── github/            # Issue fetcher + Auto PR
 │   ├── llm/               # Provider adapters (OpenAI, Claude, DeepSeek, Grok, Ollama, Custom)
 │   ├── sandbox/           # Docker sandbox (multi-language)
-│   ├── store/             # SQLite persistence + leaderboard
+│   ├── store/             # SQLite persistence + HTTP Client interface
 │   └── validation/        # Safety gate + AST fingerprinting
 ├── app.py                 # Streamlit frontend (thin client)
+├── docker-compose.yml     # Distributed multi-agent docker orchestration
 ├── sandbox_env/           # Dockerfile for test sandbox
 ├── .env.example           # Configuration template
 └── requirements.txt       # Python (frontend) dependencies

@@ -517,3 +517,106 @@ func (e *Engine) selfHeal(failedCandidates []*Candidate, testScript string, repo
 	return report
 }
 
+// EvaluateDistributed runs Phase 3 & 4 on candidates that have already been evaluated by safety and sandbox agents.
+func (e *Engine) EvaluateDistributed(candidates []*Candidate) *Report {
+	report := &Report{TotalPatches: len(candidates)}
+
+	for _, c := range candidates {
+		if c.Blocked {
+			report.BlockedCount++
+		}
+		if c.SandboxResult != nil && c.SandboxResult.Success {
+			report.PassedSandbox++
+		}
+	}
+
+	// Filter to passing candidates
+	passing := filterPassing(candidates)
+	if len(passing) == 0 {
+		report.Summary = "All patches failed sandbox verification"
+		report.Candidates = candidates
+		return report
+	}
+
+	// ── Phase 3: Structural Similarity ──
+	e.emit("🧬 **Phase 3/4: Structural Similarity** — AST fingerprinting...")
+	fingerprints := map[string][]*Candidate{}
+	for _, c := range passing {
+		fp := validation.StructuralFingerprint(c.Patch.Code)
+		fingerprints[fp] = append(fingerprints[fp], c)
+	}
+	report.UniqueStructures = len(fingerprints)
+
+	// Score
+	maxCluster := 0
+	for _, cluster := range fingerprints {
+		if len(cluster) > maxCluster {
+			maxCluster = len(cluster)
+		}
+	}
+	for fp, cluster := range fingerprints {
+		score := 100.0
+		if maxCluster > 1 {
+			score = (float64(len(cluster)) / float64(maxCluster)) * 100.0
+		}
+		for _, c := range cluster {
+			c.StructuralScore = score
+		}
+		e.emit(fmt.Sprintf("  📊 Cluster '%s...' — %d members, score: %.1f", truncate(fp, 30), len(cluster), score))
+	}
+
+	// ── Phase 4: LLM Judge ──
+	if len(passing) == 1 {
+		e.emit("⚖️ **Phase 4/4: LLM Judge** — Skipped (only 1 candidate survived)")
+		passing[0].JudgeScore = 100
+	} else if report.UniqueStructures == 1 {
+		e.emit("⚖️ **Phase 4/4: LLM Judge** — Skipped (all candidates structurally identical)")
+		for _, c := range passing {
+			c.JudgeScore = 100
+		}
+	} else {
+		e.emit("⚖️ **Phase 4/4: LLM Judge** — Quality evaluation...")
+		e.runJudgePhase(passing)
+	}
+
+	// ── Aggregate Final Scores ──
+	e.emit("🧮 **Scoring** — Computing weighted consensus...")
+	for _, c := range passing {
+		c.FinalScore = (c.SandboxScore * WeightSandbox) +
+			(c.StructuralScore * WeightStructural) +
+			(c.JudgeScore * WeightJudge)
+	}
+
+	sort.Slice(passing, func(i, j int) bool {
+		return passing[i].FinalScore > passing[j].FinalScore
+	})
+
+	report.Winner = passing[0]
+	report.Candidates = candidates
+
+	for _, c := range candidates {
+		if c.Patch != nil {
+			report.TotalCost += c.Patch.Cost
+			report.TotalTokens += c.Patch.Tokens
+		}
+	}
+
+	var sb strings.Builder
+	sb.WriteString("=== DISTRIBUTED CONSENSUS REPORT ===\n")
+	sb.WriteString(fmt.Sprintf("Total patches: %d | Blocked: %d | Passed Sandbox: %d | Unique structures: %d | Est. cost: $%.4f\n\n",
+		report.TotalPatches, report.BlockedCount, report.PassedSandbox, report.UniqueStructures, report.TotalCost))
+
+	for i, c := range passing {
+		sb.WriteString(fmt.Sprintf("%d. %s/%s — Final: %.1f (Sandbox: %.1f × %.0f%% + Structural: %.1f × %.0f%% + Judge: %.1f × %.0f%%)\n",
+			i+1, c.Patch.Provider, c.Patch.Model, c.FinalScore,
+			c.SandboxScore, WeightSandbox*100,
+			c.StructuralScore, WeightStructural*100,
+			c.JudgeScore, WeightJudge*100))
+	}
+	sb.WriteString(fmt.Sprintf("\n🏆 Winner: %s/%s (score: %.1f)\n", report.Winner.Patch.Provider, report.Winner.Patch.Model, report.Winner.FinalScore))
+	report.Summary = sb.String()
+
+	e.emit(fmt.Sprintf("🏆 **Winner:** %s/%s with score %.1f", report.Winner.Patch.Provider, report.Winner.Patch.Model, report.Winner.FinalScore))
+	return report
+}
+

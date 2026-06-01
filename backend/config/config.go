@@ -47,6 +47,12 @@ type Config struct {
 	// Database
 	DBPath string
 
+	// Distributed Multi-Agent Architecture
+	AgentMode       string // "monolithic" | "distributed"
+	NatsURL         string
+	RedisURL        string
+	StoreServiceURL string
+
 	// Bots
 	TelegramToken string
 	DiscordToken  string
@@ -77,12 +83,16 @@ func Load() *Config {
 		CustomJudgeKey:   os.Getenv("CUSTOM_JUDGE_KEY"),
 		CustomJudgeModel: envOrDefault("CUSTOM_JUDGE_MODEL", "custom-v1"),
 		DBPath:           envOrDefault("DB_PATH", "raven.db"),
+		AgentMode:        envOrDefault("AGENT_MODE", "monolithic"),
+		NatsURL:          envOrDefault("NATS_URL", "nats://localhost:4222"),
+		RedisURL:         envOrDefault("REDIS_URL", "localhost:6379"),
+		StoreServiceURL:  envOrDefault("STORE_SERVICE_URL", "http://localhost:8081"),
 		TelegramToken:    os.Getenv("TELEGRAM_BOT_TOKEN"),
 		DiscordToken:     os.Getenv("DISCORD_BOT_TOKEN"),
 	}
 
-	log.Printf("[config] Loaded — port=%s, redundancy=%d, judge=%s/%s, auto_pr=%v, heal_retries=%d",
-		cfg.Port, cfg.Redundancy, cfg.JudgeProvider, cfg.JudgeModel, cfg.AutoPR, cfg.MaxHealRetries)
+	log.Printf("[config] Loaded — port=%s, redundancy=%d, judge=%s/%s, auto_pr=%v, heal_retries=%d, agent_mode=%s",
+		cfg.Port, cfg.Redundancy, cfg.JudgeProvider, cfg.JudgeModel, cfg.AutoPR, cfg.MaxHealRetries, cfg.AgentMode)
 	return cfg
 }
 

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Shardz4/raven/broker"
 	"github.com/Shardz4/raven/config"
 	"github.com/Shardz4/raven/consensus"
 	gh "github.com/Shardz4/raven/github"
@@ -19,17 +20,19 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/google/uuid"
+	"github.com/nats-io/nats.go"
 )
 
 // Server holds the API dependencies.
 type Server struct {
 	cfg       *config.Config
-	store     *store.Store
+	store     store.Storer
 	fetcher   *gh.Fetcher
 	prCreator *gh.PRCreator
 	solvers   []llm.Provider
 	judge     llm.Provider
 	sandbox   *sandbox.Manager
+	broker    *broker.Broker
 
 	// SSE event channels per job ID
 	mu      sync.RWMutex
@@ -39,13 +42,24 @@ type Server struct {
 // NewServer creates the API server with all dependencies.
 func NewServer(
 	cfg *config.Config,
-	db *store.Store,
+	db store.Storer,
 	fetcher *gh.Fetcher,
 	prCreator *gh.PRCreator,
 	solvers []llm.Provider,
 	judge llm.Provider,
 	sb *sandbox.Manager,
 ) *Server {
+	var b *broker.Broker
+	if cfg.AgentMode == "distributed" {
+		var err error
+		b, err = broker.New(cfg.NatsURL)
+		if err != nil {
+			log.Printf("⚠ NATS connection failed in API router: %v", err)
+		} else {
+			log.Println("✓ NATS broker connected in API router")
+		}
+	}
+
 	return &Server{
 		cfg:       cfg,
 		store:     db,
@@ -54,6 +68,7 @@ func NewServer(
 		solvers:   solvers,
 		judge:     judge,
 		sandbox:   sb,
+		broker:    b,
 		streams:   make(map[string][]chan string),
 	}
 }
@@ -128,8 +143,22 @@ func (s *Server) handleSolve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Start processing in the background
-	go s.ProcessJob(job)
+	// Start processing
+	if s.cfg.AgentMode == "distributed" && s.broker != nil {
+		reqMsg := broker.JobRequest{
+			JobID:    jobID,
+			IssueURL: req.IssueURL,
+		}
+		data, _ := json.Marshal(reqMsg)
+		if err := s.broker.Publish(broker.SubjectJobs, data); err != nil {
+			log.Printf("Failed to publish job request to NATS: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to publish job to queue"})
+			return
+		}
+	} else {
+		// Monolithic: Start processing in the background
+		go s.ProcessJob(job)
+	}
 
 	writeJSON(w, http.StatusAccepted, map[string]any{
 		"job_id": jobID,
@@ -165,22 +194,44 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 
 	ch := make(chan string, 100)
 
-	// Register stream
-	s.mu.Lock()
-	s.streams[id] = append(s.streams[id], ch)
-	s.mu.Unlock()
+	// If distributed, subscribe to NATS events for this job
+	var sub *nats.Subscription
+	if s.cfg.AgentMode == "distributed" && s.broker != nil {
+		var err error
+		sub, err = s.broker.Subscribe(broker.SubjectEventsPrefix+id, func(msg *nats.Msg) {
+			var event broker.EventMsg
+			if err := json.Unmarshal(msg.Data, &event); err == nil {
+				select {
+				case ch <- event.Message:
+				default:
+				}
+			}
+		})
+		if err != nil {
+			log.Printf("Failed to subscribe to NATS events: %v", err)
+		}
+	} else {
+		// Monolithic: register stream locally
+		s.mu.Lock()
+		s.streams[id] = append(s.streams[id], ch)
+		s.mu.Unlock()
+	}
 
 	// Cleanup on disconnect
 	defer func() {
-		s.mu.Lock()
-		channels := s.streams[id]
-		for i, c := range channels {
-			if c == ch {
-				s.streams[id] = append(channels[:i], channels[i+1:]...)
-				break
+		if sub != nil {
+			sub.Unsubscribe()
+		} else {
+			s.mu.Lock()
+			channels := s.streams[id]
+			for i, c := range channels {
+				if c == ch {
+					s.streams[id] = append(channels[:i], channels[i+1:]...)
+					break
+				}
 			}
+			s.mu.Unlock()
 		}
-		s.mu.Unlock()
 		close(ch)
 	}()
 
@@ -246,6 +297,15 @@ func (s *Server) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 // ── Job Processing ──
 
 func (s *Server) emitEvent(jobID, message string) {
+	if s.cfg.AgentMode == "distributed" && s.broker != nil {
+		event := broker.EventMsg{
+			JobID:   jobID,
+			Message: message,
+		}
+		data, _ := json.Marshal(event)
+		_ = s.broker.Publish(broker.SubjectEventsPrefix+jobID, data)
+	}
+
 	s.mu.RLock()
 	channels := s.streams[jobID]
 	s.mu.RUnlock()
@@ -274,12 +334,46 @@ func (s *Server) SubmitAndProcessJob(issueURL string, onEvent func(msg string)) 
 		return "", fmt.Errorf("failed to create job: %w", err)
 	}
 
-	go s.ProcessJobWithCallback(job, onEvent)
+	if s.cfg.AgentMode == "distributed" && s.broker != nil {
+		reqMsg := broker.JobRequest{
+			JobID:    jobID,
+			IssueURL: issueURL,
+		}
+		data, _ := json.Marshal(reqMsg)
+		if err := s.broker.Publish(broker.SubjectJobs, data); err != nil {
+			return "", fmt.Errorf("publish to nats: %w", err)
+		}
+		// In distributed mode, hook up bot callback to NATS events stream
+		go func() {
+			sub, err := s.broker.Subscribe(broker.SubjectEventsPrefix+jobID, func(msg *nats.Msg) {
+				var event broker.EventMsg
+				if err := json.Unmarshal(msg.Data, &event); err == nil {
+					onEvent(event.Message)
+				}
+			})
+			if err != nil {
+				log.Printf("Failed to subscribe bot callback to NATS events: %v", err)
+				return
+			}
+			defer sub.Unsubscribe()
+
+			// Wait until job is completed or failed
+			for {
+				time.Sleep(2 * time.Second)
+				jobStatus, err := s.store.GetJob(jobID)
+				if err == nil && (jobStatus.Status == "completed" || jobStatus.Status == "failed") {
+					break
+				}
+			}
+		}()
+	} else {
+		go s.ProcessJobWithCallback(job, onEvent)
+	}
 	return jobID, nil
 }
 
 // GetStore returns the underlying store for direct queries (e.g., from bots).
-func (s *Server) GetStore() *store.Store {
+func (s *Server) GetStore() store.Storer {
 	return s.store
 }
 

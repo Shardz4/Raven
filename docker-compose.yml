@@ -1,0 +1,157 @@
+version: '3.8'
+
+services:
+  nats:
+    image: nats:latest
+    container_name: raven-nats
+    command: "-JS"
+    ports:
+      - "4222:4222"
+      - "8222:8222" # monitoring
+
+  store-service:
+    build:
+      context: ./backend
+      dockerfile: - # We can define Dockerfiles or run a multi-binary build
+    # To keep Docker setup extremely clean, we can define a shared entrypoint/image
+    # or build them individually. Since they are all Go services, we can compile them
+    # locally or use a standard multi-stage build. Let's make individual service configurations.
+    image: raven-agents:latest
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: raven-store
+    command: /app/store-service
+    ports:
+      - "8081:8081"
+    environment:
+      - AGENT_MODE=distributed
+      - NATS_URL=nats://nats:4222
+      - DB_PATH=/data/raven.db
+    volumes:
+      - raven-db-data:/data
+    depends_on:
+      - nats
+
+  api-server:
+    image: raven-agents:latest
+    container_name: raven-api
+    command: /app/api-server
+    ports:
+      - "8080:8080"
+    environment:
+      - AGENT_MODE=distributed
+      - NATS_URL=nats://nats:4222
+      - STORE_SERVICE_URL=http://store-service:8081
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - XAI_API_KEY=${XAI_API_KEY}
+      - PORT=8080
+    depends_on:
+      - nats
+      - store-service
+
+  orchestrator:
+    image: raven-agents:latest
+    container_name: raven-orchestrator
+    command: /app/orchestrator
+    environment:
+      - AGENT_MODE=distributed
+      - NATS_URL=nats://nats:4222
+      - STORE_SERVICE_URL=http://store-service:8081
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - RAVEN_REDUNDANCY=${RAVEN_REDUNDANCY:-3}
+    depends_on:
+      - nats
+      - store-service
+
+  solver-openai:
+    image: raven-agents:latest
+    container_name: raven-solver-openai
+    command: /app/solver
+    environment:
+      - AGENT_MODE=distributed
+      - SOLVER_PROVIDER=openai
+      - NATS_URL=nats://nats:4222
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      - nats
+
+  solver-anthropic:
+    image: raven-agents:latest
+    container_name: raven-solver-anthropic
+    command: /app/solver
+    environment:
+      - AGENT_MODE=distributed
+      - SOLVER_PROVIDER=anthropic
+      - NATS_URL=nats://nats:4222
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    depends_on:
+      - nats
+
+  safety-agent:
+    image: raven-agents:latest
+    container_name: raven-safety
+    command: /app/safety
+    environment:
+      - AGENT_MODE=distributed
+      - NATS_URL=nats://nats:4222
+      - STORE_SERVICE_URL=http://store-service:8081
+    depends_on:
+      - nats
+      - store-service
+
+  sandbox-agent:
+    image: raven-agents:latest
+    container_name: raven-sandbox-agent
+    command: /app/sandbox-agent
+    environment:
+      - AGENT_MODE=distributed
+      - NATS_URL=nats://nats:4222
+      - STORE_SERVICE_URL=http://store-service:8081
+      - DOCKER_TIMEOUT=${DOCKER_TIMEOUT:-60}
+      - SANDBOX_IMAGE=${SANDBOX_IMAGE:-raven-sandbox:latest}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - nats
+      - store-service
+
+  consensus-agent:
+    image: raven-agents:latest
+    container_name: raven-consensus
+    command: /app/consensus
+    environment:
+      - AGENT_MODE=distributed
+      - NATS_URL=nats://nats:4222
+      - STORE_SERVICE_URL=http://store-service:8081
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - XAI_API_KEY=${XAI_API_KEY}
+      - JUDGE_PROVIDER=${JUDGE_PROVIDER:-openai}
+      - JUDGE_MODEL=${JUDGE_MODEL:-gpt-4o}
+      - MAX_HEAL_RETRIES=${MAX_HEAL_RETRIES:-2}
+      - RAVEN_REDUNDANCY=${RAVEN_REDUNDANCY:-3}
+    depends_on:
+      - nats
+      - store-service
+
+  pr-agent:
+    image: raven-agents:latest
+    container_name: raven-pr
+    command: /app/pr
+    environment:
+      - AGENT_MODE=distributed
+      - NATS_URL=nats://nats:4222
+      - STORE_SERVICE_URL=http://store-service:8081
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - AUTO_PR=${AUTO_PR:-true}
+    depends_on:
+      - nats
+      - store-service
+
+volumes:
+  raven-db-data:

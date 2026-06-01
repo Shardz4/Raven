@@ -23,13 +23,22 @@ func main() {
 	// 1. Load config
 	cfg := config.Load()
 
-	// 2. Initialize SQLite store
-	db, err := store.New(cfg.DBPath)
-	if err != nil {
-		log.Fatalf("❌ Database init failed: %v", err)
+	// 2. Initialize store based on AgentMode
+	var db store.Storer
+	var err error
+	if cfg.AgentMode == "distributed" {
+		db = store.NewClient(cfg.StoreServiceURL)
+		log.Println("✓ Database client ready (Store Service)")
+	} else {
+		var localDB *store.Store
+		localDB, err = store.New(cfg.DBPath)
+		if err != nil {
+			log.Fatalf("❌ Database init failed: %v", err)
+		}
+		db = localDB
+		log.Println("✓ Database ready (local SQLite)")
 	}
 	defer db.Close()
-	log.Println("✓ Database ready")
 
 	// 3. Initialize GitHub fetcher + PR creator
 	fetcher := gh.NewFetcher(cfg.GitHubToken)

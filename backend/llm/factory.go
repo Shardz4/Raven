@@ -105,3 +105,34 @@ func buildJudge(cfg *config.Config, solvers []Provider) (Provider, error) {
 		return nil, fmt.Errorf("unknown judge provider: %s", cfg.JudgeProvider)
 	}
 }
+
+// BuildProvider builds a single LLM provider by name.
+func BuildProvider(name string, cfg *config.Config) (Provider, error) {
+	switch name {
+	case "openai":
+		if cfg.OpenAIKey == "" {
+			return nil, fmt.Errorf("openai key not configured")
+		}
+		return NewOpenAI(cfg.OpenAIKey, "gpt-4o"), nil
+	case "anthropic":
+		if cfg.AnthropicKey == "" {
+			return nil, fmt.Errorf("anthropic key not configured")
+		}
+		return NewAnthropic(cfg.AnthropicKey, "claude-sonnet-4-20250514"), nil
+	case "deepseek":
+		if cfg.DeepSeekKey == "" {
+			return nil, fmt.Errorf("deepseek key not configured")
+		}
+		return NewDeepSeek(cfg.DeepSeekKey, "deepseek-chat"), nil
+	case "grok":
+		if cfg.GrokKey == "" {
+			return nil, fmt.Errorf("grok key not configured")
+		}
+		return NewGrok(cfg.GrokKey, "grok-beta"), nil
+	case "ollama":
+		p := NewOllama(cfg.OllamaURL, "llama2")
+		return p, nil
+	default:
+		return nil, fmt.Errorf("unknown provider %s", name)
+	}
+}

@@ -1,0 +1,27 @@
+name: Welcome Bot
+
+on:
+  pull_request_target:
+    types: [opened]
+  issues:
+    types: [opened]
+
+jobs:
+  welcome:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Welcome First-Time Contributors
+        uses: actions/first-interaction@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-message: |
+            Welcome to the Raven repository! 🪶
+            
+            Thank you for opening your first issue. We're excited to have you here! A maintainer will review your issue shortly. In the meantime, please make sure you've checked out our [Contributing Guidelines](CONTRIBUTING.md).
+          pr-message: |
+            Welcome to the Raven repository! 🪶
+            
+            Thank you for opening your first pull request! We're thrilled to have your contribution to autonomous AI development. A maintainer will review your changes as soon as possible. Please ensure your PR follows our [Contributing Guidelines](CONTRIBUTING.md) and all tests pass.

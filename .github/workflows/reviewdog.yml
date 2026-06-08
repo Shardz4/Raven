@@ -1,0 +1,50 @@
+name: reviewdog
+
+on: [pull_request]
+
+jobs:
+  golangci-lint:
+    name: runner / golangci-lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: backend/go.sum
+          
+      - name: golangci-lint
+        uses: reviewdog/action-golangci-lint@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          workdir: backend
+          level: warning
+          reporter: github-pr-review
+          filter_mode: added
+          fail_on_error: false
+
+  flake8:
+    name: runner / flake8
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          
+      - name: flake8
+        uses: reviewdog/action-flake8@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          level: warning
+          reporter: github-pr-review
+          filter_mode: added
+          fail_on_error: false

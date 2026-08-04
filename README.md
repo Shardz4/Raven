@@ -299,7 +299,7 @@ streamlit run app.py
 
 ---
 
-## 8. 🔌 Custom Judge Model
+## 8.  Custom Judge Model
 
 Plug in your own fine-tuned model as the consensus judge. *(Note: If the configured judge provider is unavailable or lacks a valid API key, Raven will automatically fall back to using the first available solver model as the judge.)*
 
@@ -324,7 +324,7 @@ Or the standard OpenAI-compatible format.
 
 ---
 
-## 9. 🤖 Chat Bots
+## 9.  Chat Bots
 
 Raven can be controlled directly from **Telegram** and **Discord**. Set the bot tokens in your `.env` to enable them.
 
@@ -402,35 +402,35 @@ Raven/
 ├── LICENSE                         # Project license (1.5 KB)
 ├── README.md                       # Project README with features, architecture, quickstart
 ├── requirements.txt                # Python dependencies: streamlit, requests, sseclient-py, streamlit-lottie
-├── app.py                          # 🖥️  Streamlit frontend — dark-themed thin client
+├── app.py                          #   Streamlit frontend — dark-themed thin client
 │                                   #     - Issue submission with live SSE terminal console
 │                                   #     - Dashboard tab (job history, success rate metrics)
 │                                   #     - Sidebar (health check, provider list, judge info)
 │
-├── docker-compose.yml              # 🐳 Distributed multi-agent orchestration
+├── docker-compose.yml              #  Distributed multi-agent orchestration
 │                                   #     9 services: nats, store-service, api-server,
 │                                   #     orchestrator, solver-openai, solver-anthropic,
 │                                   #     safety-agent, sandbox-agent, consensus-agent, pr-agent
 │
-├── sandbox_env/                    # 🏖️  Docker sandbox image
+├── sandbox_env/                    #   Docker sandbox image
 │   └── Dockerfile                  #     python:3.9-slim + git + pytest
 │
-└── backend/                        # ⚙️  Go backend — all server and agent code
+└── backend/                        #   Go backend — all server and agent code
     ├── Dockerfile                  #     Multi-stage build: golang:1.25-alpine → alpine
     │                               #     Compiles 8 binaries: api-server, store-service,
     │                               #     orchestrator, solver, safety, sandbox-agent, consensus, pr
-    ├── main.go                     #     🚀 Monolithic entry point
+    ├── main.go                     #     Monolithic entry point
     │                               #     Boots config → store → GitHub → LLMs → sandbox → API → bots
     ├── go.mod                      #     Go module: github.com/Shardz4/raven (go 1.25.0)
     ├── go.sum                      #     Dependency checksums
     ├── raven.db                    #     SQLite database file (runtime artifact)
     ├── raven.exe                   #     Compiled binary (runtime artifact, ~20 MB)
     │
-    ├── config/                     # ⚙️  Centralised configuration
+    ├── config/                     #   Centralised configuration
     │   └── config.go               #     Config struct (25+ fields), Load() from .env,
     │                               #     AvailableProviders() helper, env helpers
     │
-    ├── llm/                        # 🤖 LLM provider abstraction layer
+    ├── llm/                        #  LLM provider abstraction layer
     │   ├── provider.go             #     Provider interface, PatchResult struct, FanOut(),
     │   │                           #     ExtractCode() markdown code extractor
     │   ├── factory.go              #     BuildProviders() — instantiate all solvers + judge
@@ -447,26 +447,26 @@ Raven/
     │   └── custom.go               #     Custom HTTP endpoint adapter for plug-in judges
     │                               #     Supports Raven-native and OpenAI-compatible formats
     │
-    ├── github/                     # 🐙 GitHub API integration
+    ├── github/                     #  GitHub API integration
     │   ├── fetcher.go              #     ParseIssueURL(), FetchIssue(), detectLanguage()
     │   │                           #     Builds Issue struct with Prompt() for LLMs
     │   └── pr.go                   #     PRCreator: forkRepo → getDefaultBranchSHA →
     │                               #     createBranch → commitFile → openPR
     │                               #     Language-aware solution filenames
     │
-    ├── sandbox/                    # 🐳 Docker sandbox execution
+    ├── sandbox/                    #  Docker sandbox execution
     │   └── docker.go               #     Manager: create → start → inject → exec → capture
     │                               #     RunVerification() with timeout + resource limits
     │                               #     BuildTestScriptForLanguage() — Python/Go/JS/Rust
     │                               #     copyToContainer() via tar archive injection
     │
-    ├── validation/                 # 🛡️  Safety gate + structural analysis
+    ├── validation/                 #   Safety gate + structural analysis
     │   └── safety.go               #     ValidatePythonPatch() — forbidden imports/calls
     │                               #     ValidateGoCode() — Go AST syntax check
     │                               #     StructuralFingerprint() — code shape extraction
     │                               #     NormalizePythonCode() — canonical form for comparison
     │
-    ├── consensus/                  # 🧠 RavenMind consensus engine
+    ├── consensus/                  #  RavenMind consensus engine
     │   └── ravenmind.go            #     Engine.Evaluate() — full 4-phase pipeline
     │                               #     Phase 1: Safety Gate → Phase 2: Sandbox →
     │                               #     Phase 3: AST Clustering → Phase 4: LLM Judge
@@ -476,7 +476,7 @@ Raven/
     │                               #     parseJudgeScores() — multi-fallback JSON parser
     │                               #     Candidate, Report structs, weight constants
     │
-    ├── api/                        # 🌐 REST API + SSE server
+    ├── api/                        #  REST API + SSE server
     │   └── router.go               #     Server struct with all dependencies
     │                               #     Chi router: /api/health, /api/solve, /api/solve/{id},
     │                               #     /api/solve/{id}/stream, /api/jobs, /api/providers,
@@ -485,7 +485,7 @@ Raven/
     │                               #     SubmitAndProcessJob() — bot/programmatic entry point
     │                               #     SSE streaming (local channels + NATS bridge)
     │
-    ├── store/                      # 💾 Persistence layer
+    ├── store/                      #  Persistence layer
     │   ├── store.go                #     Storer interface (6 methods)
     │   ├── sqlite.go               #     SQLite implementation: jobs + leaderboard tables
     │   │                           #     WAL mode, auto-migration, upsert-on-conflict
@@ -493,7 +493,7 @@ Raven/
     │   └── client.go               #     HTTP client implementation of Storer
     │                               #     For distributed mode — talks to Store Service
     │
-    ├── broker/                     # 📡 NATS JetStream message broker
+    ├── broker/                     #  NATS JetStream message broker
     │   ├── broker.go               #     Broker struct: Connect, setupStreams, Publish,
     │   │                           #     Subscribe, QueueSubscribe, Close
     │   │                           #     4 JetStream streams (memory storage)
@@ -505,7 +505,7 @@ Raven/
     │                               #     ValidatedPatchMsg, SandboxRequest, SandboxResultMsg,
     │                               #     ConsensusRequest, ConsensusWinnerMsg, EventMsg
     │
-    ├── bots/                       # 🤖 Chat bot integrations
+    ├── bots/                       #  Chat bot integrations
     │   ├── service.go              #     BotService: shared bridge between bots and API server
     │   │                           #     SolveIssue(), GetJobStatus(), GetLeaderboard()
     │   │                           #     FormatJobStatus(), FormatLeaderboard() — text formatters
@@ -516,7 +516,7 @@ Raven/
     │                               #     Slash commands: /solve, /status, /leaderboard, /help
     │                               #     Deferred interaction responses with embed updates
     │
-    └── agents/                     # 🤖 Distributed agent entry points
+    └── agents/                     #  Distributed agent entry points
         ├── orchestrator/
         │   └── main.go             #     Job intake agent: subscribe raven.jobs → fetch issue →
         │                           #     fan-out PatchRequests to solver subjects

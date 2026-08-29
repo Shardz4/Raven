@@ -1,4 +1,4 @@
-streamlit>=1.61.1
+streamlit>=1.62.0
 streamlit-lottie>=0.0.5
 requests>=2.34.2
 sseclient-py>=1.9.0
